@@ -10,14 +10,27 @@ export interface GameState {
   userGrid: Grid;
   notes: Notes;
   mistakes: number;
+  maxMistakes: number;
   hintsUsed: number;
   isGameOver: boolean;
   isComplete: boolean;
   completedUnits: Set<string>;
+  elapsed: number;
+  timerRunning: boolean;
 }
 
 export interface Hint {
-  type: 'naked_single' | 'hidden_single' | 'locked_candidates' | 'naked_pair' | 'fallback';
+  type:
+    | 'naked_single'
+    | 'hidden_single'
+    | 'locked_candidates'
+    | 'naked_pair'
+    | 'hidden_pair'
+    | 'x_wing'
+    | 'y_wing'
+    | 'swordfish'
+    | 'fallback';
+  action: 'place' | 'eliminate';
   targetCell: [number, number];
   digit: number;
   explanation: string;
@@ -31,6 +44,34 @@ export interface MoveResult {
   isComplete: boolean;
   completedUnits: string[];
 }
+
+interface Snapshot {
+  userGrid: Grid;
+  notes: Notes;
+  mistakes: number;
+}
+
+// ─── Module-level constants ────────────────────────────────────────────────────
+
+/** All 27 units (9 rows + 9 cols + 9 boxes) */
+const ALL_UNITS: [number, number][][] = (() => {
+  const units: [number, number][][] = [];
+  for (let i = 0; i < 9; i++) {
+    // rows
+    units.push(Array.from({ length: 9 }, (_, c) => [i, c]));
+    // cols
+    units.push(Array.from({ length: 9 }, (_, r) => [r, i]));
+    // boxes
+    const br = Math.floor(i / 3) * 3;
+    const bc = (i % 3) * 3;
+    const box: [number, number][] = [];
+    for (let r = br; r < br + 3; r++)
+      for (let c = bc; c < bc + 3; c++)
+        box.push([r, c]);
+    units.push(box);
+  }
+  return units;
+})();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +131,7 @@ function boxPeers(r: number, c: number): [number, number][] {
   return peers;
 }
 
-/** All peers of a cell */
+/** All peers of a cell (row + col + box, deduplicated) */
 function allPeers(r: number, c: number): [number, number][] {
   const seen = new Set<string>();
   const peers: [number, number][] = [];
@@ -131,6 +172,24 @@ function uniqueCells(cells: [number, number][]): [number, number][] {
   });
 }
 
+/** True if two cells share a row, column, or box */
+function sees(r1: number, c1: number, r2: number, c2: number): boolean {
+  if (r1 === r2 && c1 === c2) return false;
+  return r1 === r2 || c1 === c2 || boxIndex(r1, c1) === boxIndex(r2, c2);
+}
+
+/** Hebrew label for a unit (row / col / box) */
+function unitHebrewLabel(unit: [number, number][]): string {
+  const r0 = unit[0][0], c0 = unit[0][1];
+  // box: all cells share same box
+  if (unit.every(([r, c]) => boxIndex(r, c) === boxIndex(r0, c0))) return 'הריבוע';
+  // row: all same row
+  if (unit.every(([r]) => r === r0)) return `שורה ${r0 + 1}`;
+  // col: all same col
+  if (unit.every(([, c]) => c === c0)) return `עמודה ${c0 + 1}`;
+  return 'היחידה';
+}
+
 // ─── Main Class ───────────────────────────────────────────────────────────────
 
 export class SudokuEngine {
@@ -144,16 +203,84 @@ export class SudokuEngine {
   private isComplete: boolean;
   private completedUnits: Set<string>;
 
+  // Timer state
+  private elapsed: number;          // accumulated seconds
+  private timerStart: number | null; // Date.now() when started, null if paused
+
+  // Undo history
+  private history: Snapshot[];
+
   constructor(puzzleStr: string, solutionStr: string) {
     this.puzzle = parseGrid(puzzleStr);
     this.solution = parseGrid(solutionStr);
-    this.userGrid = cloneGrid(this.puzzle); // givens pre-filled
+    this.userGrid = cloneGrid(this.puzzle);
     this.notes = emptyNotes();
     this.mistakes = 0;
     this.hintsUsed = 0;
     this.isGameOver = false;
     this.isComplete = false;
     this.completedUnits = new Set();
+    this.elapsed = 0;
+    this.timerStart = null;
+    this.history = [];
+  }
+
+  // ── Timer ──────────────────────────────────────────────────────────────────
+
+  startTimer(): void {
+    if (this.timerStart !== null) return; // already running
+    this.timerStart = Date.now();
+  }
+
+  pauseTimer(): void {
+    if (this.timerStart === null) return;
+    this.elapsed += (Date.now() - this.timerStart) / 1000;
+    this.timerStart = null;
+  }
+
+  resetTimer(): void {
+    this.timerStart = null;
+    this.elapsed = 0;
+  }
+
+  getElapsed(): number {
+    if (this.timerStart !== null) {
+      return this.elapsed + (Date.now() - this.timerStart) / 1000;
+    }
+    return this.elapsed;
+  }
+
+  // ── Undo ───────────────────────────────────────────────────────────────────
+
+  private pushHistory(): void {
+    if (this.history.length >= 50) this.history.shift();
+    this.history.push({
+      userGrid: cloneGrid(this.userGrid),
+      notes: cloneNotes(this.notes),
+      mistakes: this.mistakes,
+    });
+  }
+
+  undo(): boolean {
+    const snap = this.history.pop();
+    if (!snap) return false;
+    this.userGrid = snap.userGrid;
+    this.notes = snap.notes;
+    this.mistakes = snap.mistakes;
+    this.isGameOver = this.mistakes >= 3;
+    this.isComplete = false; // after undo board can't be complete
+    return true;
+  }
+
+  resetPuzzle(): void {
+    this.userGrid = cloneGrid(this.puzzle);
+    this.notes = emptyNotes();
+    this.mistakes = 0;
+    this.isGameOver = false;
+    this.isComplete = false;
+    this.completedUnits = new Set();
+    this.history = [];
+    this.resetTimer();
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -169,10 +296,13 @@ export class SudokuEngine {
       userGrid: cloneGrid(this.userGrid),
       notes: cloneNotes(this.notes),
       mistakes: this.mistakes,
+      maxMistakes: 3,
       hintsUsed: this.hintsUsed,
       isGameOver: this.isGameOver,
       isComplete: this.isComplete,
       completedUnits: new Set(this.completedUnits),
+      elapsed: this.getElapsed(),
+      timerRunning: this.timerStart !== null,
     };
   }
 
@@ -184,11 +314,16 @@ export class SudokuEngine {
       return { correct: false, mistake: false, gameOver: false, isComplete: false, completedUnits: [] };
     }
 
+    this.pushHistory();
+
     const correct = this.solution[row][col] === digit;
 
     if (!correct) {
       this.mistakes++;
-      if (this.mistakes >= 3) this.isGameOver = true;
+      if (this.mistakes >= 3) {
+        this.isGameOver = true;
+        this.pauseTimer();
+      }
       return { correct: false, mistake: true, gameOver: this.isGameOver, isComplete: false, completedUnits: [] };
     }
 
@@ -208,6 +343,7 @@ export class SudokuEngine {
 
     // Check overall completion
     this.isComplete = this.checkAllComplete();
+    if (this.isComplete) this.pauseTimer();
 
     return {
       correct: true,
@@ -220,13 +356,15 @@ export class SudokuEngine {
 
   eraseCell(row: number, col: number): void {
     if (this.isGiven(row, col)) return;
+    this.pushHistory();
     this.userGrid[row][col] = 0;
     this.notes[row][col].clear();
   }
 
   toggleNote(row: number, col: number, digit: number): void {
     if (this.isGiven(row, col)) return;
-    if (this.userGrid[row][col] !== 0) return; // cell already filled
+    if (this.userGrid[row][col] !== 0) return;
+    this.pushHistory();
     const cell = this.notes[row][col];
     if (cell.has(digit)) cell.delete(digit);
     else cell.add(digit);
@@ -240,6 +378,10 @@ export class SudokuEngine {
       this.tryHiddenSingle() ??
       this.tryLockedCandidates() ??
       this.tryNakedPair() ??
+      this.tryHiddenPair() ??
+      this.tryXWing() ??
+      this.tryYWing() ??
+      this.trySwordfish() ??
       this.fallbackHint();
 
     return hint;
@@ -247,12 +389,10 @@ export class SudokuEngine {
 
   getCandidates(row: number, col: number): Set<number> {
     const used = new Set<number>();
-    // Givens and correct user entries in the same row, col, box
     for (const [rr, cc] of allPeers(row, col)) {
       const val = this.userGrid[rr][cc];
       if (val !== 0) used.add(val);
     }
-    // Also exclude the cell's own value (if filled)
     const self = this.userGrid[row][col];
     if (self !== 0) used.add(self);
 
@@ -323,12 +463,10 @@ export class SudokuEngine {
       const cands = this.getCandidates(r, c);
       if (cands.size === 1) {
         const digit = [...cands][0];
-        const peers = allPeers(r, c).filter(([rr, cc]) => {
-          const v = this.userGrid[rr][cc];
-          return v !== 0;
-        });
+        const peers = allPeers(r, c).filter(([rr, cc]) => this.userGrid[rr][cc] !== 0);
         return {
           type: 'naked_single',
+          action: 'place',
           targetCell: [r, c],
           digit,
           explanation: `בתא הזה יכולה להיכנס רק הספרה ${digit} – כל שאר הספרות כבר קיימות בשורה, בעמודה או בריבוע שלו`,
@@ -341,37 +479,22 @@ export class SudokuEngine {
 
   /** Strategy 2: Hidden Single */
   private tryHiddenSingle(): Hint | null {
-    // Build all 27 units
-    const units: Array<{ cells: [number, number][]; label: string; labelType: 'row' | 'col' | 'box'; index: number }> = [];
-
-    for (let i = 0; i < 9; i++) {
-      units.push({ cells: Array.from({ length: 9 }, (_, c) => [i, c]), label: `שורה ${i + 1}`, labelType: 'row', index: i });
-      units.push({ cells: Array.from({ length: 9 }, (_, r) => [r, i]), label: `עמודה ${i + 1}`, labelType: 'col', index: i });
-      units.push({ cells: boxCells(i), label: 'הריבוע', labelType: 'box', index: i });
-    }
-
-    for (const unit of units) {
+    for (const unit of ALL_UNITS) {
+      const label = unitHebrewLabel(unit);
       for (let digit = 1; digit <= 9; digit++) {
-        const candidates = unit.cells.filter(([r, c]) => {
+        const candidates = unit.filter(([r, c]) => {
           if (this.userGrid[r][c] !== 0) return false;
           return this.getCandidates(r, c).has(digit);
         });
         if (candidates.length === 1) {
           const [r, c] = candidates[0];
-          let explanation: string;
-          if (unit.labelType === 'row') {
-            explanation = `ב${unit.label}, הספרה ${digit} יכולה להופיע רק בתא אחד`;
-          } else if (unit.labelType === 'col') {
-            explanation = `ב${unit.label}, הספרה ${digit} יכולה להופיע רק בתא אחד`;
-          } else {
-            explanation = `ב${unit.label}, הספרה ${digit} יכולה להופיע רק בתא אחד`;
-          }
           return {
             type: 'hidden_single',
+            action: 'place',
             targetCell: [r, c],
             digit,
-            explanation,
-            highlightCells: uniqueCells([...unit.cells, [r, c]]),
+            explanation: `ב${label}, הספרה ${digit} יכולה להופיע רק בתא אחד`,
+            highlightCells: uniqueCells([...unit, [r, c]]),
           };
         }
       }
@@ -379,8 +502,9 @@ export class SudokuEngine {
     return null;
   }
 
-  /** Strategy 3: Locked Candidates (Pointing) */
+  /** Strategy 3: Locked Candidates (Pointing pair/triple box→line and line→box) */
   private tryLockedCandidates(): Hint | null {
+    // Box → line (pointing pairs/triples)
     for (let bi = 0; bi < 9; bi++) {
       const cells = boxCells(bi);
       for (let digit = 1; digit <= 9; digit++) {
@@ -390,66 +514,92 @@ export class SudokuEngine {
         });
         if (cands.length < 2) continue;
 
-        // Check if all candidates share the same row
         const rows = new Set(cands.map(([r]) => r));
         if (rows.size === 1) {
           const row = [...rows][0];
-          // Find peers in that row outside this box
-          const rowCells: [number, number][] = Array.from({ length: 9 }, (_, c) => [row, c]);
-          const eliminated = rowCells.filter(([r, c]) => {
+          const eliminated = Array.from({ length: 9 }, (_, c) => [row, c] as [number, number]).filter(([r, c]) => {
             if (boxIndex(r, c) === bi) return false;
             if (this.userGrid[r][c] !== 0) return false;
             return this.getCandidates(r, c).has(digit);
           });
           if (eliminated.length > 0) {
+            const groupLabel = cands.length === 2 ? 'זוג מצביע' : 'שלישייה מצביעה';
             return {
               type: 'locked_candidates',
+              action: 'eliminate',
               targetCell: cands[0],
               digit,
-              explanation: `בריבוע הזה, הספרה ${digit} חייבת להיות בשורה ${row + 1} – אפשר למחוק אותה משאר השורה`,
+              explanation: `${groupLabel}: בריבוע הזה, הספרה ${digit} חייבת להיות בשורה ${row + 1} – אפשר למחוק אותה משאר השורה`,
               highlightCells: uniqueCells([...cands, ...eliminated]),
             };
           }
         }
 
-        // Check if all candidates share the same col
         const cols = new Set(cands.map(([, c]) => c));
         if (cols.size === 1) {
           const col = [...cols][0];
-          const colCells: [number, number][] = Array.from({ length: 9 }, (_, r) => [r, col]);
-          const eliminated = colCells.filter(([r, c]) => {
+          const eliminated = Array.from({ length: 9 }, (_, r) => [r, col] as [number, number]).filter(([r, c]) => {
             if (boxIndex(r, c) === bi) return false;
             if (this.userGrid[r][c] !== 0) return false;
             return this.getCandidates(r, c).has(digit);
           });
           if (eliminated.length > 0) {
+            const groupLabel = cands.length === 2 ? 'זוג מצביע' : 'שלישייה מצביעה';
             return {
               type: 'locked_candidates',
+              action: 'eliminate',
               targetCell: cands[0],
               digit,
-              explanation: `בריבוע הזה, הספרה ${digit} חייבת להיות בעמודה ${col + 1} – אפשר למחוק אותה משאר העמודה`,
+              explanation: `${groupLabel}: בריבוע הזה, הספרה ${digit} חייבת להיות בעמודה ${col + 1} – אפשר למחוק אותה משאר העמודה`,
               highlightCells: uniqueCells([...cands, ...eliminated]),
             };
           }
         }
       }
     }
+
+    // Line → box (box-line reduction)
+    for (let i = 0; i < 9; i++) {
+      for (const isRow of [true, false]) {
+        const lineCells: [number, number][] = Array.from({ length: 9 }, (_, j) =>
+          isRow ? [i, j] : [j, i]
+        );
+        for (let digit = 1; digit <= 9; digit++) {
+          const cands = lineCells.filter(([r, c]) => {
+            if (this.userGrid[r][c] !== 0) return false;
+            return this.getCandidates(r, c).has(digit);
+          });
+          if (cands.length < 2) continue;
+          const boxes = new Set(cands.map(([r, c]) => boxIndex(r, c)));
+          if (boxes.size !== 1) continue;
+          const bi = [...boxes][0];
+          const eliminated = boxCells(bi).filter(([r, c]) => {
+            if (isRow ? r === i : c === i) return false;
+            if (this.userGrid[r][c] !== 0) return false;
+            return this.getCandidates(r, c).has(digit);
+          });
+          if (eliminated.length > 0) {
+            const lineLabel = isRow ? `שורה ${i + 1}` : `עמודה ${i + 1}`;
+            return {
+              type: 'locked_candidates',
+              action: 'eliminate',
+              targetCell: cands[0],
+              digit,
+              explanation: `ב${lineLabel}, הספרה ${digit} מוגבלת לריבוע אחד – אפשר למחוק אותה משאר הריבוע`,
+              highlightCells: uniqueCells([...cands, ...eliminated]),
+            };
+          }
+        }
+      }
+    }
+
     return null;
   }
 
   /** Strategy 4: Naked Pair */
   private tryNakedPair(): Hint | null {
-    // Build all 27 units
-    const units: Array<{ cells: [number, number][]; label: string }> = [];
-    for (let i = 0; i < 9; i++) {
-      units.push({ cells: Array.from({ length: 9 }, (_, c) => [i, c]), label: `שורה ${i + 1}` });
-      units.push({ cells: Array.from({ length: 9 }, (_, r) => [r, i]), label: `עמודה ${i + 1}` });
-      units.push({ cells: boxCells(i), label: 'הריבוע' });
-    }
-
-    for (const unit of units) {
-      // Find cells with exactly 2 candidates
-      const twoCandCells = unit.cells
+    for (const unit of ALL_UNITS) {
+      const twoCandCells = unit
         .filter(([r, c]) => this.userGrid[r][c] === 0)
         .map(([r, c]) => ({ r, c, cands: this.getCandidates(r, c) }))
         .filter(x => x.cands.size === 2);
@@ -458,13 +608,12 @@ export class SudokuEngine {
         for (let j = i + 1; j < twoCandCells.length; j++) {
           const a = twoCandCells[i];
           const b = twoCandCells[j];
-          const aArr = [...a.cands].sort();
-          const bArr = [...b.cands].sort();
+          const aArr = [...a.cands].sort((x, y) => x - y);
+          const bArr = [...b.cands].sort((x, y) => x - y);
           if (aArr[0] !== bArr[0] || aArr[1] !== bArr[1]) continue;
 
           const [d1, d2] = aArr;
-          // Find other cells in the unit affected
-          const affected = unit.cells.filter(([r, c]) => {
+          const affected = unit.filter(([r, c]) => {
             if ((r === a.r && c === a.c) || (r === b.r && c === b.c)) return false;
             if (this.userGrid[r][c] !== 0) return false;
             const cands = this.getCandidates(r, c);
@@ -472,21 +621,286 @@ export class SudokuEngine {
           });
 
           if (affected.length > 0) {
-            // Determine unit type label
-            const unitLabel = unit.label.startsWith('שורה') ? unit.label
-              : unit.label.startsWith('עמודה') ? unit.label
-              : 'הריבוע';
-            const unitSuffix = unit.label.startsWith('שורה') ? 'השורה'
-              : unit.label.startsWith('עמודה') ? 'העמודה'
-              : 'הריבוע';
-
+            const label = unitHebrewLabel(unit);
+            const suffix = label.startsWith('שורה') ? 'השורה' : label.startsWith('עמודה') ? 'העמודה' : 'הריבוע';
             return {
               type: 'naked_pair',
+              action: 'eliminate',
               targetCell: [a.r, a.c],
               digit: d1,
-              explanation: `שני תאים ב${unitLabel} מכילים רק את הספרות ${d1} ו-${d2} – אפשר למחוק אותן משאר ${unitSuffix}`,
+              explanation: `זוג עירום ב${label}: שני תאים מכילים רק את הספרות ${d1} ו-${d2} – אפשר למחוק אותן משאר ${suffix}`,
               highlightCells: uniqueCells([[a.r, a.c], [b.r, b.c], ...affected]),
             };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Strategy 5: Hidden Pair */
+  private tryHiddenPair(): Hint | null {
+    for (const unit of ALL_UNITS) {
+      const emptyCells = unit.filter(([r, c]) => this.userGrid[r][c] === 0);
+      // For each pair of digits (d1, d2), check if they appear in exactly 2 cells
+      for (let d1 = 1; d1 <= 8; d1++) {
+        for (let d2 = d1 + 1; d2 <= 9; d2++) {
+          const cells1 = emptyCells.filter(([r, c]) => this.getCandidates(r, c).has(d1));
+          const cells2 = emptyCells.filter(([r, c]) => this.getCandidates(r, c).has(d2));
+          if (cells1.length !== 2 || cells2.length !== 2) continue;
+
+          // Check both digits appear in exactly the same 2 cells
+          const key1 = cells1.map(([r, c]) => `${r},${c}`).sort().join('|');
+          const key2 = cells2.map(([r, c]) => `${r},${c}`).sort().join('|');
+          if (key1 !== key2) continue;
+
+          // Check there are other candidates in those 2 cells to eliminate
+          const [r1, c1] = cells1[0];
+          const [r2, c2] = cells1[1];
+          const cands1 = this.getCandidates(r1, c1);
+          const cands2 = this.getCandidates(r2, c2);
+          const extraIn1 = [...cands1].filter(d => d !== d1 && d !== d2);
+          const extraIn2 = [...cands2].filter(d => d !== d1 && d !== d2);
+          if (extraIn1.length === 0 && extraIn2.length === 0) continue;
+
+          const label = unitHebrewLabel(unit);
+          return {
+            type: 'hidden_pair',
+            action: 'eliminate',
+            targetCell: [r1, c1],
+            digit: d1,
+            explanation: `זוג נסתר ב${label}: הספרות ${d1} ו-${d2} מופיעות רק בשני תאים – אפשר למחוק את שאר המועמדים מאותם תאים`,
+            highlightCells: uniqueCells([[r1, c1], [r2, c2]]),
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Strategy 6: X-Wing */
+  private tryXWing(): Hint | null {
+    for (let digit = 1; digit <= 9; digit++) {
+      // Row-based X-Wing
+      const rowCandCols: Map<number, number[]> = new Map();
+      for (let r = 0; r < 9; r++) {
+        const cols = [];
+        for (let c = 0; c < 9; c++) {
+          if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) cols.push(c);
+        }
+        if (cols.length === 2) rowCandCols.set(r, cols);
+      }
+      const rowsWithTwo = [...rowCandCols.entries()];
+      for (let i = 0; i < rowsWithTwo.length; i++) {
+        for (let j = i + 1; j < rowsWithTwo.length; j++) {
+          const [r1, cols1] = rowsWithTwo[i];
+          const [r2, cols2] = rowsWithTwo[j];
+          if (cols1[0] !== cols2[0] || cols1[1] !== cols2[1]) continue;
+          const [c1, c2] = cols1;
+          // Eliminate digit from those columns, excluding the two defining rows
+          const eliminated: [number, number][] = [];
+          for (let r = 0; r < 9; r++) {
+            if (r === r1 || r === r2) continue;
+            for (const c of [c1, c2]) {
+              if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) {
+                eliminated.push([r, c]);
+              }
+            }
+          }
+          if (eliminated.length > 0) {
+            return {
+              type: 'x_wing',
+              action: 'eliminate',
+              targetCell: [r1, c1],
+              digit,
+              explanation: `X-Wing: הספרה ${digit} מופיעה בדיוק בשתי עמודות בשורות ${r1 + 1} ו-${r2 + 1} – אפשר למחוק אותה משאר אותן עמודות`,
+              highlightCells: uniqueCells([[r1, c1], [r1, c2], [r2, c1], [r2, c2], ...eliminated]),
+            };
+          }
+        }
+      }
+
+      // Col-based X-Wing
+      const colCandRows: Map<number, number[]> = new Map();
+      for (let c = 0; c < 9; c++) {
+        const rows = [];
+        for (let r = 0; r < 9; r++) {
+          if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) rows.push(r);
+        }
+        if (rows.length === 2) colCandRows.set(c, rows);
+      }
+      const colsWithTwo = [...colCandRows.entries()];
+      for (let i = 0; i < colsWithTwo.length; i++) {
+        for (let j = i + 1; j < colsWithTwo.length; j++) {
+          const [c1, rows1] = colsWithTwo[i];
+          const [c2, rows2] = colsWithTwo[j];
+          if (rows1[0] !== rows2[0] || rows1[1] !== rows2[1]) continue;
+          const [r1, r2] = rows1;
+          const eliminated: [number, number][] = [];
+          for (let c = 0; c < 9; c++) {
+            if (c === c1 || c === c2) continue;
+            for (const r of [r1, r2]) {
+              if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) {
+                eliminated.push([r, c]);
+              }
+            }
+          }
+          if (eliminated.length > 0) {
+            return {
+              type: 'x_wing',
+              action: 'eliminate',
+              targetCell: [r1, c1],
+              digit,
+              explanation: `X-Wing: הספרה ${digit} מופיעה בדיוק בשתי שורות בעמודות ${c1 + 1} ו-${c2 + 1} – אפשר למחוק אותה משאר אותן שורות`,
+              highlightCells: uniqueCells([[r1, c1], [r2, c1], [r1, c2], [r2, c2], ...eliminated]),
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Strategy 7: Y-Wing (XY-Wing) */
+  private tryYWing(): Hint | null {
+    const empty = this.emptyCells();
+    const twoCand = empty
+      .map(([r, c]) => ({ r, c, cands: this.getCandidates(r, c) }))
+      .filter(x => x.cands.size === 2);
+
+    for (const pivot of twoCand) {
+      const [a, b] = [...pivot.cands];
+      // Find wing1: sees pivot, has candidates {a, c} for some c ≠ b
+      // Find wing2: sees pivot, has candidates {b, c} for same c, and sees wing1
+      for (const wing1 of twoCand) {
+        if (wing1.r === pivot.r && wing1.c === pivot.c) continue;
+        if (!sees(pivot.r, pivot.c, wing1.r, wing1.c)) continue;
+        if (!wing1.cands.has(a)) continue;
+        const [wa1, wa2] = [...wing1.cands];
+        const c = wa1 === a ? wa2 : wa1; // the common digit
+        if (c === b) continue; // need c ≠ b
+
+        for (const wing2 of twoCand) {
+          if (wing2.r === pivot.r && wing2.c === pivot.c) continue;
+          if (wing2.r === wing1.r && wing2.c === wing1.c) continue;
+          if (!sees(pivot.r, pivot.c, wing2.r, wing2.c)) continue;
+          if (!wing2.cands.has(b) || !wing2.cands.has(c)) continue;
+          if (wing2.cands.size !== 2) continue;
+
+          // Eliminate c from cells that see both wing1 and wing2
+          const eliminated: [number, number][] = empty.filter(([r, cc]) => {
+            if ((r === wing1.r && cc === wing1.c) || (r === wing2.r && cc === wing2.c)) return false;
+            return sees(r, cc, wing1.r, wing1.c) && sees(r, cc, wing2.r, wing2.c) &&
+              this.getCandidates(r, cc).has(c);
+          });
+
+          if (eliminated.length > 0) {
+            return {
+              type: 'y_wing',
+              action: 'eliminate',
+              targetCell: [pivot.r, pivot.c],
+              digit: c,
+              explanation: `Y-Wing: תא ציר עם {${a},${b}} + שני כנפיים – אפשר למחוק את הספרה ${c} מכל תא הנצפה על ידי שתי הכנפיים`,
+              highlightCells: uniqueCells([[pivot.r, pivot.c], [wing1.r, wing1.c], [wing2.r, wing2.c], ...eliminated]),
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Strategy 8: Swordfish */
+  private trySwordfish(): Hint | null {
+    for (let digit = 1; digit <= 9; digit++) {
+      // Row-based Swordfish
+      const rowCandCols: Map<number, number[]> = new Map();
+      for (let r = 0; r < 9; r++) {
+        const cols = [];
+        for (let c = 0; c < 9; c++) {
+          if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) cols.push(c);
+        }
+        if (cols.length >= 2 && cols.length <= 3) rowCandCols.set(r, cols);
+      }
+      const rowEntries = [...rowCandCols.entries()];
+      for (let i = 0; i < rowEntries.length; i++) {
+        for (let j = i + 1; j < rowEntries.length; j++) {
+          for (let k = j + 1; k < rowEntries.length; k++) {
+            const [r1, cols1] = rowEntries[i];
+            const [r2, cols2] = rowEntries[j];
+            const [r3, cols3] = rowEntries[k];
+            const unionCols = new Set([...cols1, ...cols2, ...cols3]);
+            if (unionCols.size !== 3) continue;
+            const colArr = [...unionCols];
+            const eliminated: [number, number][] = [];
+            for (let r = 0; r < 9; r++) {
+              if (r === r1 || r === r2 || r === r3) continue;
+              for (const c of colArr) {
+                if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) {
+                  eliminated.push([r, c]);
+                }
+              }
+            }
+            if (eliminated.length > 0) {
+              const definers: [number, number][] = [];
+              for (const [r, cols] of [[r1, cols1], [r2, cols2], [r3, cols3]] as [number, number[]][]) {
+                for (const c of cols) definers.push([r, c]);
+              }
+              return {
+                type: 'swordfish',
+                action: 'eliminate',
+                targetCell: [r1, cols1[0]],
+                digit,
+                explanation: `Swordfish: הספרה ${digit} מוגבלת לשלוש שורות ושלוש עמודות – אפשר למחוק אותה משאר אותן עמודות`,
+                highlightCells: uniqueCells([...definers, ...eliminated]),
+              };
+            }
+          }
+        }
+      }
+
+      // Col-based Swordfish
+      const colCandRows: Map<number, number[]> = new Map();
+      for (let c = 0; c < 9; c++) {
+        const rows = [];
+        for (let r = 0; r < 9; r++) {
+          if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) rows.push(r);
+        }
+        if (rows.length >= 2 && rows.length <= 3) colCandRows.set(c, rows);
+      }
+      const colEntries = [...colCandRows.entries()];
+      for (let i = 0; i < colEntries.length; i++) {
+        for (let j = i + 1; j < colEntries.length; j++) {
+          for (let k = j + 1; k < colEntries.length; k++) {
+            const [c1, rows1] = colEntries[i];
+            const [c2, rows2] = colEntries[j];
+            const [c3, rows3] = colEntries[k];
+            const unionRows = new Set([...rows1, ...rows2, ...rows3]);
+            if (unionRows.size !== 3) continue;
+            const rowArr = [...unionRows];
+            const eliminated: [number, number][] = [];
+            for (let c = 0; c < 9; c++) {
+              if (c === c1 || c === c2 || c === c3) continue;
+              for (const r of rowArr) {
+                if (this.userGrid[r][c] === 0 && this.getCandidates(r, c).has(digit)) {
+                  eliminated.push([r, c]);
+                }
+              }
+            }
+            if (eliminated.length > 0) {
+              const definers: [number, number][] = [];
+              for (const [c, rows] of [[c1, rows1], [c2, rows2], [c3, rows3]] as [number, number[]][]) {
+                for (const r of rows) definers.push([r, c]);
+              }
+              return {
+                type: 'swordfish',
+                action: 'eliminate',
+                targetCell: [rows1[0], c1],
+                digit,
+                explanation: `Swordfish: הספרה ${digit} מוגבלת לשלוש עמודות ושלוש שורות – אפשר למחוק אותה משאר אותן שורות`,
+                highlightCells: uniqueCells([...definers, ...eliminated]),
+              };
+            }
           }
         }
       }
@@ -507,16 +921,14 @@ export class SudokuEngine {
       }
     }
 
-    if (!best) {
-      // Puzzle is complete or stuck — shouldn't happen
-      best = [0, 0];
-    }
+    if (!best) best = [0, 0];
 
     const [r, c] = best;
     const digit = this.solution[r][c];
 
     return {
       type: 'fallback',
+      action: 'place',
       targetCell: [r, c],
       digit,
       explanation: 'נסה את התא הזה – יש לו הכי פחות אפשרויות',

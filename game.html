@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>סודוקו אונליין - שחקו סודוקו בחינם</title>
+  <style>
+    /* =========================================
+       CSS CUSTOM PROPERTIES
+    ========================================= */
+    :root {
+      --white:           #FFFFFF;
+      --gray-50:         #F9FAFB;
+      --gray-100:        #F3F4F6;
+      --gray-200:        #E5E7EB;
+      --gray-300:        #D1D5DB;
+      --gray-400:        #9CA3AF;
+      --gray-500:        #6B7280;
+      --gray-600:        #4B5563;
+      --gray-700:        #374151;
+      --gray-900:        #111827;
+
+      --blue-50:         #EFF6FF;
+      --blue-100:        #DBEAFE;
+      --blue-200:        #BFDBFE;
+      --blue-500:        #3B82F6;
+      --blue-600:        #2563EB;
+      --blue-900:        #1E3A5F;
+
+      --red-100:         #FEE2E2;
+      --red-500:         #EF4444;
+      --red-600:         #DC2626;
+
+      /* Semantic tokens */
+      --given-color:     var(--gray-900);
+      --user-color:      var(--blue-600);
+      --conflict-bg:     var(--red-100);
+      --conflict-color:  var(--red-600);
+      --selected-bg:     var(--blue-100);
+      --highlighted-bg:  var(--blue-50);
+      --same-number-bg:  var(--blue-200);
+
+      --grid-thin:       var(--gray-300);
+      --grid-bold:       var(--gray-700);
+      --grid-outer:      var(--gray-700);
+
+      --header-bg:       var(--blue-900);
+
+      --font-system:     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                         "Helvetica Neue", Arial, sans-serif;
+      --font-mono:       ui-monospace, "SF Mono", "Cascadia Mono",
+                         "Segoe UI Mono", monospace;
+
+      --radius-sm:       6px;
+      --radius-md:       10px;
+      --radius-lg:       14px;
+
+      --shadow-sm:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md:       0 4px 12px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.06);
+      --shadow-lg:       0 16px 48px rgba(0,0,0,.16), 0 4px 16px rgba(0,0,0,.08);
+
+      --transition:      0.15s ease;
+    }
+
+    /* =========================================
+       RESET
+    ========================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      font-family: var(--font-system);
+      background: #F7F9FB;
+      color: var(--gray-900);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a    { text-decoration: none; color: inherit; }
+    button { cursor: pointer; font-family: inherit; border: none; background: none; }
+    ul   { list-style: none; }
+
+    /* =========================================
+       HEADER
+    ========================================= */
+    .site-header {
+      background: var(--header-bg);
+      height: 62px;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 0 rgba(0,0,0,.18);
+    }
+
+    /* Logo container — holds image + fallback text */
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    /* Image slot: dashed placeholder until logo is dropped in */
+    .logo-img-slot {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      border: 1.5px dashed rgba(255,255,255,.35);
+      background: rgba(255,255,255,.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: border-color var(--transition);
+    }
+    .logo-img-slot:hover { border-color: rgba(255,255,255,.6); }
+
+    /* The actual <img> — hidden while src is empty */
+    .logo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    .logo-img[src]:not([src=""]) { display: block; }
+
+    /* Placeholder icon shown when no logo set */
+    .logo-placeholder-icon {
+      width: 18px;
+      height: 18px;
+      opacity: .45;
+      flex-shrink: 0;
+    }
+
+    .logo-wordmark {
+      font-size: 21px;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.4px;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-inline-start: auto;
+    }
+
+    .header-nav a {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: rgba(255,255,255,.65);
+      transition: color var(--transition);
+    }
+    .header-nav a:hover { color: var(--white); }
+
+    /* =========================================
+       DIFFICULTY TABS
+    ========================================= */
+    .diff-bar {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      flex-shrink: 0;
+    }
+
+    .diff-tabs {
+      display: flex;
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    .diff-tab {
+      flex: 1;
+      padding: 13px 4px 11px;
+      text-align: center;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--gray-500);
+      border-bottom: 2.5px solid transparent;
+      cursor: pointer;
+      transition: all var(--transition);
+      user-select: none;
+    }
+    .diff-tab:hover { color: var(--blue-600); }
+    .diff-tab.active {
+      color: var(--blue-600);
+      border-bottom-color: var(--blue-500);
+      font-weight: 600;
+    }
+
+    /* =========================================
+       PAGE BODY  —  RTL layout
+       RTL flex-row visual order (first = rightmost):
+         ad-right | puzzle | input | ad-left
+    ========================================= */
+    .page-body {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px 20px;
+      gap: 18px;
+    }
+
+    /* =========================================
+       AD SIDEBARS
+       .ad-right → appears on far RIGHT (desktop ≥ 1100px)
+       .ad-left  → appears on far LEFT  (desktop ≥ 1300px)
+    ========================================= */
+    .ad-sidebar {
+      width: 160px;
+      min-height: 500px;
+      flex-shrink: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 12px;
+      gap: 16px;
+      border-radius: var(--radius-lg);
+    }
+
+    /* Right ad: show at 1100px */
+    .ad-right {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow-sm);
+    }
+    @media (min-width: 1100px) {
+      .ad-right { display: flex; }
+    }
+
+    /* Left ad: show at 1320px (requires more room) */
+    .ad-left {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow-sm);
+    }
+    @media (min-width: 1320px) {
+      .ad-left { display: flex; }
+    }
+
+    .ad-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--gray-300);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .ad-slot {
+      width: 140px;
+      height: 300px;
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--gray-200);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gray-300);
+      font-size: 12px;
+    }
+
+    /* =========================================
+       PUZZLE PANEL  (right side in RTL)
+    ========================================= */
+    .puzzle-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 420px;
+      flex-shrink: 0;
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 14px 14px 18px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--gray-200);
+    }
+
+    /* =========================================
+       INPUT PANEL  (left side in RTL)
+       controls + phone-keyboard numpad
+    ========================================= */
+    .input-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+      width: 252px;
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--gray-200);
+      /* align top of controls with top of grid, below info bar */
+      margin-top: 52px;
+    }
+
+    /* =========================================
+       GAME INFO BAR  (inside puzzle-panel)
+    ========================================= */
+    .game-info {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 2px 14px;
+    }
+
+    .info-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .diff-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+    }
+
+    .mistakes-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mistakes-text {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+
+    .mistake-pips {
+      display: flex;
+      gap: 4px;
+    }
+
+    .pip {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      border: 1.5px solid var(--gray-300);
+      background: transparent;
+      transition: all 0.2s;
+    }
+    .pip.on {
+      background: var(--red-500);
+      border-color: var(--red-500);
+    }
+
+    .game-timer {
+      font-family: var(--font-mono);
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--gray-700);
+      letter-spacing: 1.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .btn-new-game {
+      background: var(--blue-500);
+      color: var(--white);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: var(--radius-sm);
+      transition: background var(--transition), transform var(--transition);
+    }
+    .btn-new-game:hover { background: var(--blue-600); }
+    .btn-new-game:active { transform: scale(.97); }
+
+    /* =========================================
+       SUDOKU GRID
+    ========================================= */
+    .sudoku-board {
+      width: 100%;
+    }
+
+    .sudoku-grid {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: grid;
+      grid-template-rows: repeat(9, 1fr);
+      border: 2.5px solid var(--grid-outer);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .grid-row {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+    }
+
+    /* Every cell */
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-inline-end: 1px solid var(--grid-thin);
+      border-bottom: 1px solid var(--grid-thin);
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: background-color 0.08s;
+      aspect-ratio: 1 / 1;
+    }
+
+    .cell-num {
+      font-size: clamp(16px, 2.8vw, 26px);
+      font-weight: 500;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    /* Remove outer borders (handled by container) */
+    .cell:last-child { border-inline-end: none; }
+    .grid-row:last-child .cell { border-bottom: none; }
+
+    /* Thick box borders after col 3, col 6 */
+    .cell.box-col { border-inline-end: 2px solid var(--grid-bold); }
+
+    /* Thick box borders after row 3, row 6 */
+    .grid-row.box-row .cell { border-bottom: 2px solid var(--grid-bold); }
+
+    /* Number types */
+    .cell.given  .cell-num { color: var(--given-color); font-weight: 700; }
+    .cell.user   .cell-num { color: var(--user-color); font-weight: 500; }
+    .cell.wrong  .cell-num { color: var(--conflict-color); font-weight: 500; }
+
+    /* Highlight states (order matters — later rules win) */
+    .cell.hl-peer     { background: var(--highlighted-bg); }
+    .cell.hl-same-num { background: var(--same-number-bg); }
+    .cell.hl-conflict { background: var(--conflict-bg); }
+    .cell.hl-selected { background: var(--selected-bg) !important; }
+
+    /* Pencil marks */
+    .cell-notes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      padding: 2px;
+      pointer-events: none;
+    }
+
+    .note-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(5px, 1.1vw, 8px);
+      font-weight: 500;
+      color: var(--gray-500);
+      line-height: 1;
+    }
+
+    /* =========================================
+       ACTION CONTROLS  —  2×2 grid in input-panel
+    ========================================= */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 7px;
+      width: 100%;
+    }
+
+    .ctrl {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 58px;
+      border-radius: var(--radius-md);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      border: 1px solid var(--gray-200);
+      background: var(--white);
+      transition: all var(--transition);
+      letter-spacing: .2px;
+    }
+    .ctrl:hover {
+      background: var(--gray-50);
+      border-color: var(--gray-300);
+      color: var(--gray-800);
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .ctrl.active {
+      background: var(--blue-50);
+      border-color: var(--blue-400, #60a5fa);
+      color: var(--blue-600);
+    }
+    .ctrl svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 1.75;
+    }
+
+    /* Divider label between controls and numpad */
+    .input-divider {
+      height: 1px;
+      background: var(--gray-100);
+      margin: 2px 0;
+    }
+
+    /* =========================================
+       NUMBER PAD  —  3×3 phone keyboard, big buttons
+    ========================================= */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      width: 100%;
+    }
+
+    .num-btn {
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--gray-700);
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--gray-200);
+      transition: all var(--transition);
+      min-height: 68px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    .num-btn:hover {
+      background: var(--blue-50);
+      border-color: var(--blue-200);
+      color: var(--blue-600);
+      box-shadow: 0 2px 8px rgba(37,99,235,.12);
+      transform: translateY(-1px);
+    }
+    .num-btn:active {
+      transform: scale(.94) translateY(0);
+      box-shadow: none;
+    }
+    .num-btn.done {
+      opacity: .18;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* =========================================
+       COMPLETION MODAL
+    ========================================= */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 32px 28px 28px;
+      width: min(360px, 92vw);
+      text-align: center;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(18px) scale(.97);
+      transition: transform 0.25s ease;
+    }
+    .modal-overlay.open .modal { transform: none; }
+
+    .modal-icon { font-size: 52px; margin-bottom: 10px; line-height: 1; }
+
+    .modal-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--gray-900);
+      margin-bottom: 6px;
+    }
+
+    .modal-sub {
+      font-size: 14.5px;
+      color: var(--gray-500);
+      margin-bottom: 24px;
+    }
+
+    .modal-stats {
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      padding: 18px 20px;
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+      margin-bottom: 24px;
+    }
+
+    .stat-val {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--blue-600);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .stat-lbl {
+      font-size: 11px;
+      color: var(--gray-400);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      transition: all var(--transition);
+    }
+    .modal-btn-primary {
+      background: var(--blue-500);
+      color: var(--white);
+    }
+    .modal-btn-primary:hover { background: var(--blue-600); }
+    .modal-btn-secondary {
+      background: var(--gray-100);
+      color: var(--gray-700);
+    }
+    .modal-btn-secondary:hover { background: var(--gray-200); }
+
+    /* =========================================
+       FOOTER
+    ========================================= */
+    .site-footer {
+      background: var(--gray-50);
+      border-top: 1px solid var(--gray-200);
+      padding: 18px 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px 18px;
+      margin-bottom: 10px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: var(--gray-500);
+      transition: color var(--transition);
+    }
+    .footer-links a:hover { color: var(--gray-900); }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+
+    /* =========================================
+       RESPONSIVE
+    ========================================= */
+
+    /* Mobile: single column, input-panel below puzzle */
+    @media (max-width: 720px) {
+      .page-body {
+        flex-direction: column;
+        align-items: center;
+        padding: 12px;
+        gap: 10px;
+      }
+
+      .puzzle-panel {
+        max-width: 440px;
+        width: 100%;
+        padding: 10px 10px 14px;
+      }
+
+      .input-panel {
+        margin-top: 0;           /* no offset needed in column layout */
+        width: 100%;
+        max-width: 440px;
+        padding: 12px;
+      }
+
+      /* Controls: 4-in-a-row on mobile */
+      .controls {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+      }
+
+      .ctrl { height: 52px; }
+
+      .num-btn {
+        font-size: 22px;
+        min-height: 54px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .btn-new-game { padding: 6px 12px; font-size: 12px; }
+      .ctrl { height: 46px; font-size: 10px; gap: 3px; }
+      .ctrl svg { width: 18px; height: 18px; }
+      .num-btn { font-size: 19px; min-height: 46px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ======== HEADER ======== -->
+  <header class="site-header">
+
+    <a href="/" class="header-logo">
+      <!-- LOGO SLOT: drop your image file here (e.g. src="logo.png") -->
+      <div class="logo-img-slot" title="הכניסו כאן את הלוגו שלכם">
+        <img src="" alt="לוגו" class="logo-img" id="logo-img" />
+        <!-- placeholder icon shown while no logo is set -->
+        <svg class="logo-placeholder-icon" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5L5 21"/>
+        </svg>
+      </div>
+      <span class="logo-wordmark">סודוקו</span>
+    </a>
+
+    <nav class="header-nav">
+      <a href="/daily">אתגר יומי</a>
+      <a href="/print">להדפסה</a>
+      <a href="/how-to-play">איך לשחק</a>
+    </nav>
+
+  </header>
+
+  <!-- ======== DIFFICULTY TABS ======== -->
+  <div class="diff-bar">
+    <div class="diff-tabs">
+      <span class="diff-tab active" data-diff="easy">קל</span>
+      <span class="diff-tab" data-diff="medium">בינוני</span>
+      <span class="diff-tab" data-diff="hard">קשה</span>
+      <span class="diff-tab" data-diff="expert">מומחה</span>
+    </div>
+  </div>
+
+  <!-- ======== PAGE BODY ======== -->
+  <!--
+    RTL flex-row: first DOM child = rightmost visual position
+      1. ad-right    → FAR RIGHT  (≥ 1100px)
+      2. puzzle-panel → RIGHT
+      3. input-panel  → LEFT
+      4. ad-left     → FAR LEFT   (≥ 1320px)
+  -->
+  <main class="page-body">
+
+    <!-- 1. AD RIGHT (far right, desktop ≥ 1100px) -->
+    <aside class="ad-sidebar ad-right" aria-hidden="true">
+      <span class="ad-label">פרסום</span>
+      <div class="ad-slot">300×250</div>
+    </aside>
+
+    <!-- 2. PUZZLE PANEL (right) -->
+    <div class="puzzle-panel">
+
+      <!-- Game Info Bar -->
+      <div class="game-info">
+        <div class="info-left">
+          <span class="diff-label" id="diff-label">קל</span>
+          <div class="mistakes-wrap">
+            <span class="mistakes-text">טעויות:</span>
+            <div class="mistake-pips" id="pips">
+              <span class="pip"></span>
+              <span class="pip"></span>
+              <span class="pip"></span>
+            </div>
+          </div>
+        </div>
+        <div class="game-timer" id="timer">00:00</div>
+        <button class="btn-new-game" id="btn-new">משחק חדש</button>
+      </div>
+
+      <!-- Sudoku Grid -->
+      <div class="sudoku-board">
+        <div class="sudoku-grid" id="grid"></div>
+      </div>
+
+    </div><!-- /puzzle-panel -->
+
+    <!-- 3. INPUT PANEL (left) — controls + phone numpad -->
+    <div class="input-panel">
+
+      <!-- Action Controls  2×2 -->
+      <div class="controls">
+
+        <button class="ctrl" id="btn-undo" title="ביטול">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+          </svg>
+          ביטול
+        </button>
+
+        <button class="ctrl" id="btn-erase" title="מחיקה">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 20H7L3 16l9-9 8 8-3 3Z"/>
+            <path d="m6.5 17.5 1 1"/>
+          </svg>
+          מחיקה
+        </button>
+
+        <button class="ctrl" id="btn-notes" title="הערות">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 19l-4 1 1-4Z"/>
+          </svg>
+          הערות
+        </button>
+
+        <button class="ctrl" id="btn-hint" title="רמז">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+            <path d="M9 18h6"/>
+            <path d="M10 22h4"/>
+          </svg>
+          רמז
+        </button>
+
+      </div>
+
+      <div class="input-divider"></div>
+
+      <!-- Number Pad  3×3 phone keyboard -->
+      <div class="numpad" id="numpad">
+        <button class="num-btn" data-n="1">1</button>
+        <button class="num-btn" data-n="2">2</button>
+        <button class="num-btn" data-n="3">3</button>
+        <button class="num-btn" data-n="4">4</button>
+        <button class="num-btn" data-n="5">5</button>
+        <button class="num-btn" data-n="6">6</button>
+        <button class="num-btn" data-n="7">7</button>
+        <button class="num-btn" data-n="8">8</button>
+        <button class="num-btn" data-n="9">9</button>
+      </div>
+
+    </div><!-- /input-panel -->
+
+    <!-- 4. AD LEFT (far left, desktop ≥ 1320px) -->
+    <aside class="ad-sidebar ad-left" aria-hidden="true">
+      <span class="ad-label">פרסום</span>
+      <div class="ad-slot">300×250</div>
+    </aside>
+
+  </main>
+
+  <!-- ======== COMPLETION MODAL ======== -->
+  <div class="modal-overlay" id="modal" role="dialog" aria-modal="true" aria-label="פאזל הושלם">
+    <div class="modal">
+      <div class="modal-icon">🎉</div>
+      <h2 class="modal-title">כל הכבוד!</h2>
+      <p class="modal-sub">פתרתם את הפאזל בהצלחה</p>
+      <div class="modal-stats">
+        <div>
+          <div class="stat-val" id="modal-time">00:00</div>
+          <div class="stat-lbl">זמן</div>
+        </div>
+        <div>
+          <div class="stat-val" id="modal-mistakes">0</div>
+          <div class="stat-lbl">טעויות</div>
+        </div>
+        <div>
+          <div class="stat-val" id="modal-hints">0</div>
+          <div class="stat-lbl">רמזים</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-secondary" id="modal-share">שיתוף ↗</button>
+        <button class="modal-btn modal-btn-primary" id="modal-new">משחק חדש</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== FOOTER ======== -->
+  <footer class="site-footer">
+    <div class="footer-links">
+      <a href="/about">אודות</a>
+      <a href="/how-to-play">איך לשחק</a>
+      <a href="/tips">טיפים</a>
+      <a href="/daily">יומי</a>
+      <a href="/print">להדפסה</a>
+      <a href="/privacy">פרטיות</a>
+      <a href="/terms">תנאי שימוש</a>
+    </div>
+    <p class="footer-copy">© 2026 סודוקו | כל הזכויות שמורות</p>
+  </footer>
+
+
+  <!-- ======================================================
+       JAVASCRIPT — GAME ENGINE (UI DEMO + INTERACTION)
+  ====================================================== -->
+  <script>
+  "use strict";
+
+  /* --------------------------------------------------
+     SAMPLE PUZZLE (classic givens from spec)
+     0 = empty cell
+  -------------------------------------------------- */
+  const SAMPLE_PUZZLE = [
+    [5,3,0, 0,7,0, 0,0,0],
+    [6,0,0, 1,9,5, 0,0,0],
+    [0,9,8, 0,0,0, 0,6,0],
+
+    [8,0,0, 0,6,0, 0,0,3],
+    [4,0,0, 8,0,3, 0,0,1],
+    [7,0,0, 0,2,0, 0,0,6],
+
+    [0,6,0, 0,0,0, 2,8,0],
+    [0,0,0, 4,1,9, 0,0,5],
+    [0,0,0, 0,8,0, 0,7,9],
+  ];
+
+  const SAMPLE_SOLUTION = [
+    [5,3,4, 6,7,8, 9,1,2],
+    [6,7,2, 1,9,5, 3,4,8],
+    [1,9,8, 3,4,2, 5,6,7],
+
+    [8,5,9, 7,6,1, 4,2,3],
+    [4,2,6, 8,5,3, 7,9,1],
+    [7,1,3, 9,2,4, 8,5,6],
+
+    [9,6,1, 5,3,7, 2,8,4],
+    [2,8,7, 4,1,9, 6,3,5],
+    [3,4,5, 2,8,6, 1,7,9],
+  ];
+
+  /* --------------------------------------------------
+     GAME STATE
+  -------------------------------------------------- */
+  const state = {
+    puzzle:   null,   // 9×9: 0 = empty, 1-9 = given
+    solution: null,   // 9×9: correct answer
+    userGrid: null,   // 9×9: 0 = empty, 1-9 = user placed
+    notes:    null,   // 9×9 of Set<number>
+
+    selected: null,   // { r, c } | null
+    notesMode: false,
+    mistakes: 0,
+    hintsUsed: 0,
+    history: [],      // undo stack
+
+    timerSec: 0,
+    timerHandle: null,
+    gameDone: false,
+  };
+
+  /* --------------------------------------------------
+     INIT
+  -------------------------------------------------- */
+  function initGame(puzzle, solution) {
+    clearInterval(state.timerHandle);
+    state.puzzle   = puzzle.map(r => [...r]);
+    state.solution = solution.map(r => [...r]);
+    state.userGrid = puzzle.map(r => r.map(v => v === 0 ? 0 : null));
+    state.notes    = Array.from({length:9}, () =>
+                       Array.from({length:9}, () => new Set()));
+    state.selected  = null;
+    state.notesMode = false;
+    state.mistakes  = 0;
+    state.hintsUsed = 0;
+    state.history   = [];
+    state.timerSec  = 0;
+    state.gameDone  = false;
+
+    document.getElementById('btn-notes').classList.remove('active');
+    setTimer(0);
+    updatePips();
+    renderGrid();
+    updateNumpadDone();
+
+    state.timerHandle = setInterval(() => {
+      if (!state.gameDone) {
+        state.timerSec++;
+        setTimer(state.timerSec);
+      }
+    }, 1000);
+  }
+
+  /* --------------------------------------------------
+     RENDER GRID
+  -------------------------------------------------- */
+  function renderGrid() {
+    const gridEl = document.getElementById('grid');
+    gridEl.innerHTML = '';
+
+    const { r: sr, c: sc } = state.selected ?? { r: -1, c: -1 };
+    const selVal = (sr >= 0) ? getValue(sr, sc) : 0;
+
+    for (let r = 0; r < 9; r++) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'grid-row' + ((r === 2 || r === 5) ? ' box-row' : '');
+
+      for (let c = 0; c < 9; c++) {
+        const cellEl = document.createElement('div');
+        cellEl.dataset.r = r;
+        cellEl.dataset.c = c;
+
+        // Base classes
+        let cls = 'cell';
+        if (c === 2 || c === 5) cls += ' box-col';
+
+        const given = state.puzzle[r][c] !== 0;
+        const userVal = state.userGrid[r][c];
+        const hasNotes = state.notes[r][c].size > 0;
+
+        if (given)           cls += ' given';
+        else if (userVal > 0) cls += ' user';
+
+        // Conflict: wrong answer placed
+        if (!given && userVal > 0 && state.solution[r][c] !== userVal) {
+          cls += ' wrong hl-conflict';
+        } else {
+          // Peer / same-number highlights
+          if (sr >= 0 && !(r === sr && c === sc)) {
+            const isPeer = r === sr || c === sc || sameBox(r, c, sr, sc);
+            if (isPeer)                            cls += ' hl-peer';
+            if (selVal > 0 && getValue(r,c) === selVal) cls += ' hl-same-num';
+          }
+        }
+
+        if (r === sr && c === sc) cls += ' hl-selected';
+        cellEl.className = cls;
+
+        // Content
+        const val = given ? state.puzzle[r][c] : userVal;
+        if (val > 0) {
+          const span = document.createElement('span');
+          span.className = 'cell-num';
+          span.textContent = val;
+          cellEl.appendChild(span);
+        } else if (hasNotes) {
+          cellEl.appendChild(buildNotes(state.notes[r][c]));
+        }
+
+        cellEl.addEventListener('pointerdown', () => selectCell(r, c));
+        rowEl.appendChild(cellEl);
+      }
+
+      gridEl.appendChild(rowEl);
+    }
+  }
+
+  function buildNotes(noteSet) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cell-notes';
+    for (let n = 1; n <= 9; n++) {
+      const span = document.createElement('span');
+      span.className = 'note-num';
+      span.textContent = noteSet.has(n) ? n : '';
+      wrap.appendChild(span);
+    }
+    return wrap;
+  }
+
+  /* --------------------------------------------------
+     HELPERS
+  -------------------------------------------------- */
+  function getValue(r, c) {
+    return state.puzzle[r][c] !== 0
+      ? state.puzzle[r][c]
+      : (state.userGrid[r][c] || 0);
+  }
+
+  function sameBox(r1, c1, r2, c2) {
+    return Math.floor(r1/3) === Math.floor(r2/3)
+        && Math.floor(c1/3) === Math.floor(c2/3);
+  }
+
+  /* --------------------------------------------------
+     SELECTION
+  -------------------------------------------------- */
+  function selectCell(r, c) {
+    state.selected = { r, c };
+    renderGrid();
+  }
+
+  /* --------------------------------------------------
+     PLACE NUMBER
+  -------------------------------------------------- */
+  function placeNumber(num) {
+    if (state.gameDone || !state.selected) return;
+    const { r, c } = state.selected;
+    if (state.puzzle[r][c] !== 0) return; // given cell
+
+    if (state.notesMode) {
+      const ns = state.notes[r][c];
+      saveHistory({ type: 'note', r, c, prev: new Set(ns) });
+      ns.has(num) ? ns.delete(num) : ns.add(num);
+    } else {
+      saveHistory({ type: 'cell', r, c,
+                    prevVal: state.userGrid[r][c],
+                    prevNotes: new Set(state.notes[r][c]) });
+      state.userGrid[r][c] = num;
+
+      if (num !== 0 && state.solution[r][c] !== num) {
+        // Wrong answer
+        state.mistakes = Math.min(3, state.mistakes + 1);
+        updatePips();
+      } else if (num > 0) {
+        // Correct — clear related notes
+        clearRelatedNotes(r, c, num);
+        updateNumpadDone();
+        checkComplete();
+      }
+    }
+
+    renderGrid();
+  }
+
+  function clearRelatedNotes(r, c, num) {
+    for (let i = 0; i < 9; i++) {
+      state.notes[r][i].delete(num);
+      state.notes[i][c].delete(num);
+    }
+    const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for (let dr = 0; dr < 3; dr++)
+      for (let dc = 0; dc < 3; dc++)
+        state.notes[br+dr][bc+dc].delete(num);
+  }
+
+  /* --------------------------------------------------
+     CONTROLS
+  -------------------------------------------------- */
+  function undo() {
+    if (!state.history.length) return;
+    const snap = state.history.pop();
+    if (snap.type === 'cell') {
+      state.userGrid[snap.r][snap.c] = snap.prevVal;
+      state.notes[snap.r][snap.c] = snap.prevNotes;
+    } else {
+      state.notes[snap.r][snap.c] = snap.prev;
+    }
+    updateNumpadDone();
+    renderGrid();
+  }
+
+  function erase() {
+    if (state.gameDone || !state.selected) return;
+    const { r, c } = state.selected;
+    if (state.puzzle[r][c] !== 0) return;
+    saveHistory({ type: 'cell', r, c,
+                  prevVal: state.userGrid[r][c],
+                  prevNotes: new Set(state.notes[r][c]) });
+    state.userGrid[r][c] = 0;
+    state.notes[r][c].clear();
+    renderGrid();
+  }
+
+  function toggleNotes() {
+    state.notesMode = !state.notesMode;
+    document.getElementById('btn-notes').classList.toggle('active', state.notesMode);
+  }
+
+  function hint() {
+    if (state.gameDone || !state.selected) return;
+    const { r, c } = state.selected;
+    if (state.puzzle[r][c] !== 0) return;
+    if (state.userGrid[r][c] === state.solution[r][c]) return;
+
+    saveHistory({ type: 'cell', r, c,
+                  prevVal: state.userGrid[r][c],
+                  prevNotes: new Set(state.notes[r][c]) });
+    state.userGrid[r][c] = state.solution[r][c];
+    state.notes[r][c].clear();
+    state.hintsUsed++;
+    clearRelatedNotes(r, c, state.solution[r][c]);
+    updateNumpadDone();
+    renderGrid();
+    checkComplete();
+  }
+
+  /* --------------------------------------------------
+     HISTORY
+  -------------------------------------------------- */
+  function saveHistory(snap) {
+    state.history.push(snap);
+    if (state.history.length > 200) state.history.shift();
+  }
+
+  /* --------------------------------------------------
+     NUMPAD — dim completed numbers
+  -------------------------------------------------- */
+  function updateNumpadDone() {
+    const counts = new Array(10).fill(0);
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++) {
+        const v = getValue(r, c);
+        if (v > 0 && state.solution[r][c] === v) counts[v]++;
+      }
+    document.querySelectorAll('.num-btn').forEach(btn => {
+      const n = +btn.dataset.n;
+      btn.classList.toggle('done', counts[n] >= 9);
+    });
+  }
+
+  /* --------------------------------------------------
+     MISTAKES
+  -------------------------------------------------- */
+  function updatePips() {
+    document.querySelectorAll('.pip').forEach((pip, i) => {
+      pip.classList.toggle('on', i < state.mistakes);
+    });
+  }
+
+  /* --------------------------------------------------
+     TIMER
+  -------------------------------------------------- */
+  function setTimer(sec) {
+    const m  = String(Math.floor(sec / 60)).padStart(2, '0');
+    const s  = String(sec % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = `${m}:${s}`;
+  }
+
+  function fmtTime(sec) {
+    const m = String(Math.floor(sec / 60)).padStart(2, '0');
+    const s = String(sec % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  /* --------------------------------------------------
+     COMPLETION CHECK
+  -------------------------------------------------- */
+  function checkComplete() {
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++)
+        if (getValue(r, c) !== state.solution[r][c]) return;
+
+    state.gameDone = true;
+    clearInterval(state.timerHandle);
+
+    document.getElementById('modal-time').textContent     = fmtTime(state.timerSec);
+    document.getElementById('modal-mistakes').textContent = state.mistakes;
+    document.getElementById('modal-hints').textContent    = state.hintsUsed;
+
+    setTimeout(() => document.getElementById('modal').classList.add('open'), 500);
+  }
+
+  /* --------------------------------------------------
+     DIFFICULTY TABS
+  -------------------------------------------------- */
+  document.querySelectorAll('.diff-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.diff-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('diff-label').textContent = tab.textContent;
+      // In the real app, generate puzzle for tab.dataset.diff
+      newGame();
+    });
+  });
+
+  /* --------------------------------------------------
+     BUTTON WIRING
+  -------------------------------------------------- */
+  document.getElementById('btn-new').addEventListener('click', newGame);
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-erase').addEventListener('click', erase);
+  document.getElementById('btn-notes').addEventListener('click', toggleNotes);
+  document.getElementById('btn-hint').addEventListener('click', hint);
+
+  document.querySelectorAll('.num-btn').forEach(btn => {
+    btn.addEventListener('pointerdown', () => placeNumber(+btn.dataset.n));
+  });
+
+  document.getElementById('modal-new').addEventListener('click', () => {
+    document.getElementById('modal').classList.remove('open');
+    newGame();
+  });
+  document.getElementById('modal-share').addEventListener('click', shareResult);
+
+  /* --------------------------------------------------
+     KEYBOARD
+  -------------------------------------------------- */
+  document.addEventListener('keydown', e => {
+    if (!state.selected || state.gameDone) return;
+
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 9) { placeNumber(n); return; }
+
+    const { r, c } = state.selected;
+    const dirs = {
+      ArrowUp:    [-1,  0],
+      ArrowDown:  [ 1,  0],
+      ArrowLeft:  [ 0, -1],
+      ArrowRight: [ 0,  1],
+    };
+    if (dirs[e.key]) {
+      e.preventDefault();
+      const [dr, dc] = dirs[e.key];
+      selectCell(
+        Math.max(0, Math.min(8, r + dr)),
+        Math.max(0, Math.min(8, c + dc))
+      );
+      return;
+    }
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
+      erase();
+    }
+  });
+
+  /* --------------------------------------------------
+     NEW GAME
+  -------------------------------------------------- */
+  function newGame() {
+    // Replace with real puzzle generator in Next.js
+    initGame(SAMPLE_PUZZLE, SAMPLE_SOLUTION);
+  }
+
+  /* --------------------------------------------------
+     SHARE
+  -------------------------------------------------- */
+  function shareResult() {
+    const diff = document.querySelector('.diff-tab.active').textContent;
+    const text = `פתרתי סודוקו ${diff} ב-${fmtTime(state.timerSec)} עם ${state.mistakes} טעויות 🧩\nנסו גם: ${location.href}`;
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(text).then(() => alert('הועתק!'));
+    }
+  }
+
+  /* --------------------------------------------------
+     START
+  -------------------------------------------------- */
+  newGame();
+
+  </script>
+</body>
+</html>

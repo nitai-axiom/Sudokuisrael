@@ -33,8 +33,10 @@ export interface Hint {
   action: 'place' | 'eliminate';
   targetCell: [number, number];
   digit: number;
+  digits: number[];
   explanation: string;
   highlightCells: [number, number][];
+  eliminationCells: [number, number][];
 }
 
 export interface MoveResult {
@@ -76,6 +78,9 @@ const ALL_UNITS: [number, number][][] = (() => {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseGrid(str: string): Grid {
+  if (str.length < 81) {
+    throw new Error(`Invalid grid string: expected 81 characters, got ${str.length}`);
+  }
   const grid: Grid = [];
   for (let r = 0; r < 9; r++) {
     grid.push([]);
@@ -104,6 +109,14 @@ function cloneGrid(g: Grid): Grid {
 
 function cloneNotes(n: Notes): Notes {
   return n.map(row => row.map(cell => new Set(cell)));
+}
+
+function isValidCoord(row: number, col: number): boolean {
+  return Number.isInteger(row) && Number.isInteger(col) && row >= 0 && row < 9 && col >= 0 && col < 9;
+}
+
+function isValidDigit(digit: number): boolean {
+  return Number.isInteger(digit) && digit >= 1 && digit <= 9;
 }
 
 /** Row peers (excluding the cell itself) */
@@ -181,11 +194,8 @@ function sees(r1: number, c1: number, r2: number, c2: number): boolean {
 /** Hebrew label for a unit (row / col / box) */
 function unitHebrewLabel(unit: [number, number][]): string {
   const r0 = unit[0][0], c0 = unit[0][1];
-  // box: all cells share same box
   if (unit.every(([r, c]) => boxIndex(r, c) === boxIndex(r0, c0))) return 'הריבוע';
-  // row: all same row
   if (unit.every(([r]) => r === r0)) return `שורה ${r0 + 1}`;
-  // col: all same col
   if (unit.every(([, c]) => c === c0)) return `עמודה ${c0 + 1}`;
   return 'היחידה';
 }
@@ -228,7 +238,7 @@ export class SudokuEngine {
   // ── Timer ──────────────────────────────────────────────────────────────────
 
   startTimer(): void {
-    if (this.timerStart !== null) return; // already running
+    if (this.timerStart !== null) return;
     this.timerStart = Date.now();
   }
 
@@ -268,7 +278,8 @@ export class SudokuEngine {
     this.notes = snap.notes;
     this.mistakes = snap.mistakes;
     this.isGameOver = this.mistakes >= 3;
-    this.isComplete = false; // after undo board can't be complete
+    this.isComplete = false;
+    this.recomputeCompletedUnits();
     return true;
   }
 
@@ -289,6 +300,11 @@ export class SudokuEngine {
     return this.puzzle[row][col] !== 0;
   }
 
+  /** Whether a cell has been correctly filled by the user */
+  isSolved(row: number, col: number): boolean {
+    return !this.isGiven(row, col) && this.userGrid[row][col] === this.solution[row][col];
+  }
+
   getState(): GameState {
     return {
       puzzle: cloneGrid(this.puzzle),
@@ -307,10 +323,13 @@ export class SudokuEngine {
   }
 
   enterDigit(row: number, col: number, digit: number): MoveResult {
+    if (!isValidCoord(row, col) || !isValidDigit(digit)) {
+      return { correct: false, mistake: false, gameOver: this.isGameOver, isComplete: this.isComplete, completedUnits: [] };
+    }
     if (this.isGameOver || this.isComplete) {
       return { correct: false, mistake: false, gameOver: this.isGameOver, isComplete: this.isComplete, completedUnits: [] };
     }
-    if (this.isGiven(row, col)) {
+    if (this.isGiven(row, col) || this.isSolved(row, col)) {
       return { correct: false, mistake: false, gameOver: false, isComplete: false, completedUnits: [] };
     }
 
@@ -355,13 +374,17 @@ export class SudokuEngine {
   }
 
   eraseCell(row: number, col: number): void {
+    if (!isValidCoord(row, col)) return;
     if (this.isGiven(row, col)) return;
+    if (this.isSolved(row, col)) return; // cannot erase correctly placed digits
+    if (this.userGrid[row][col] === 0 && this.notes[row][col].size === 0) return; // nothing to erase
     this.pushHistory();
     this.userGrid[row][col] = 0;
     this.notes[row][col].clear();
   }
 
   toggleNote(row: number, col: number, digit: number): void {
+    if (!isValidCoord(row, col) || !isValidDigit(digit)) return;
     if (this.isGiven(row, col)) return;
     if (this.userGrid[row][col] !== 0) return;
     this.pushHistory();
@@ -370,8 +393,8 @@ export class SudokuEngine {
     else cell.add(digit);
   }
 
-  getHint(): Hint {
-    this.hintsUsed++;
+  getHint(): Hint | null {
+    if (this.isGameOver || this.isComplete) return null;
 
     const hint =
       this.tryNakedSingle() ??
@@ -384,6 +407,7 @@ export class SudokuEngine {
       this.trySwordfish() ??
       this.fallbackHint();
 
+    if (hint) this.hintsUsed++;
     return hint;
   }
 
@@ -440,6 +464,19 @@ export class SudokuEngine {
     return newly;
   }
 
+  private recomputeCompletedUnits(): void {
+    this.completedUnits.clear();
+    for (let i = 0; i < 9; i++) {
+      const rowCells: [number, number][] = Array.from({ length: 9 }, (_, c) => [i, c]);
+      if (this.isUnitComplete(rowCells)) this.completedUnits.add(`row-${i}`);
+
+      const colCells: [number, number][] = Array.from({ length: 9 }, (_, r) => [r, i]);
+      if (this.isUnitComplete(colCells)) this.completedUnits.add(`col-${i}`);
+
+      if (this.isUnitComplete(boxCells(i))) this.completedUnits.add(`box-${i}`);
+    }
+  }
+
   private checkAllComplete(): boolean {
     for (let r = 0; r < 9; r++)
       for (let c = 0; c < 9; c++)
@@ -469,8 +506,10 @@ export class SudokuEngine {
           action: 'place',
           targetCell: [r, c],
           digit,
+          digits: [digit],
           explanation: `בתא הזה יכולה להיכנס רק הספרה ${digit} – כל שאר הספרות כבר קיימות בשורה, בעמודה או בריבוע שלו`,
           highlightCells: uniqueCells([[r, c], ...peers]),
+          eliminationCells: [],
         };
       }
     }
@@ -493,8 +532,10 @@ export class SudokuEngine {
             action: 'place',
             targetCell: [r, c],
             digit,
-            explanation: `ב${label}, הספרה ${digit} יכולה להופיע רק בתא אחד`,
+            digits: [digit],
+            explanation: `ב${label}, הספרה ${digit} יכולה להופיע רק בתא הזה`,
             highlightCells: uniqueCells([...unit, [r, c]]),
+            eliminationCells: [],
           };
         }
       }
@@ -529,8 +570,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: cands[0],
               digit,
+              digits: [digit],
               explanation: `${groupLabel}: בריבוע הזה, הספרה ${digit} חייבת להיות בשורה ${row + 1} – אפשר למחוק אותה משאר השורה`,
-              highlightCells: uniqueCells([...cands, ...eliminated]),
+              highlightCells: uniqueCells([...cands]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -550,8 +593,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: cands[0],
               digit,
+              digits: [digit],
               explanation: `${groupLabel}: בריבוע הזה, הספרה ${digit} חייבת להיות בעמודה ${col + 1} – אפשר למחוק אותה משאר העמודה`,
-              highlightCells: uniqueCells([...cands, ...eliminated]),
+              highlightCells: uniqueCells([...cands]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -585,8 +630,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: cands[0],
               digit,
+              digits: [digit],
               explanation: `ב${lineLabel}, הספרה ${digit} מוגבלת לריבוע אחד – אפשר למחוק אותה משאר הריבוע`,
-              highlightCells: uniqueCells([...cands, ...eliminated]),
+              highlightCells: uniqueCells([...cands]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -628,8 +675,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: [a.r, a.c],
               digit: d1,
+              digits: [d1, d2],
               explanation: `זוג עירום ב${label}: שני תאים מכילים רק את הספרות ${d1} ו-${d2} – אפשר למחוק אותן משאר ${suffix}`,
-              highlightCells: uniqueCells([[a.r, a.c], [b.r, b.c], ...affected]),
+              highlightCells: uniqueCells([[a.r, a.c], [b.r, b.c]]),
+              eliminationCells: uniqueCells([...affected]),
             };
           }
         }
@@ -642,19 +691,16 @@ export class SudokuEngine {
   private tryHiddenPair(): Hint | null {
     for (const unit of ALL_UNITS) {
       const emptyCells = unit.filter(([r, c]) => this.userGrid[r][c] === 0);
-      // For each pair of digits (d1, d2), check if they appear in exactly 2 cells
       for (let d1 = 1; d1 <= 8; d1++) {
         for (let d2 = d1 + 1; d2 <= 9; d2++) {
           const cells1 = emptyCells.filter(([r, c]) => this.getCandidates(r, c).has(d1));
           const cells2 = emptyCells.filter(([r, c]) => this.getCandidates(r, c).has(d2));
           if (cells1.length !== 2 || cells2.length !== 2) continue;
 
-          // Check both digits appear in exactly the same 2 cells
           const key1 = cells1.map(([r, c]) => `${r},${c}`).sort().join('|');
           const key2 = cells2.map(([r, c]) => `${r},${c}`).sort().join('|');
           if (key1 !== key2) continue;
 
-          // Check there are other candidates in those 2 cells to eliminate
           const [r1, c1] = cells1[0];
           const [r2, c2] = cells1[1];
           const cands1 = this.getCandidates(r1, c1);
@@ -669,8 +715,10 @@ export class SudokuEngine {
             action: 'eliminate',
             targetCell: [r1, c1],
             digit: d1,
+            digits: [d1, d2],
             explanation: `זוג נסתר ב${label}: הספרות ${d1} ו-${d2} מופיעות רק בשני תאים – אפשר למחוק את שאר המועמדים מאותם תאים`,
             highlightCells: uniqueCells([[r1, c1], [r2, c2]]),
+            eliminationCells: uniqueCells([[r1, c1], [r2, c2]]),
           };
         }
       }
@@ -697,7 +745,6 @@ export class SudokuEngine {
           const [r2, cols2] = rowsWithTwo[j];
           if (cols1[0] !== cols2[0] || cols1[1] !== cols2[1]) continue;
           const [c1, c2] = cols1;
-          // Eliminate digit from those columns, excluding the two defining rows
           const eliminated: [number, number][] = [];
           for (let r = 0; r < 9; r++) {
             if (r === r1 || r === r2) continue;
@@ -713,8 +760,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: [r1, c1],
               digit,
+              digits: [digit],
               explanation: `X-Wing: הספרה ${digit} מופיעה בדיוק בשתי עמודות בשורות ${r1 + 1} ו-${r2 + 1} – אפשר למחוק אותה משאר אותן עמודות`,
-              highlightCells: uniqueCells([[r1, c1], [r1, c2], [r2, c1], [r2, c2], ...eliminated]),
+              highlightCells: uniqueCells([[r1, c1], [r1, c2], [r2, c1], [r2, c2]]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -751,8 +800,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: [r1, c1],
               digit,
+              digits: [digit],
               explanation: `X-Wing: הספרה ${digit} מופיעה בדיוק בשתי שורות בעמודות ${c1 + 1} ו-${c2 + 1} – אפשר למחוק אותה משאר אותן שורות`,
-              highlightCells: uniqueCells([[r1, c1], [r2, c1], [r1, c2], [r2, c2], ...eliminated]),
+              highlightCells: uniqueCells([[r1, c1], [r2, c1], [r1, c2], [r2, c2]]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -770,15 +821,13 @@ export class SudokuEngine {
 
     for (const pivot of twoCand) {
       const [a, b] = [...pivot.cands];
-      // Find wing1: sees pivot, has candidates {a, c} for some c ≠ b
-      // Find wing2: sees pivot, has candidates {b, c} for same c, and sees wing1
       for (const wing1 of twoCand) {
         if (wing1.r === pivot.r && wing1.c === pivot.c) continue;
         if (!sees(pivot.r, pivot.c, wing1.r, wing1.c)) continue;
         if (!wing1.cands.has(a)) continue;
         const [wa1, wa2] = [...wing1.cands];
-        const c = wa1 === a ? wa2 : wa1; // the common digit
-        if (c === b) continue; // need c ≠ b
+        const c = wa1 === a ? wa2 : wa1;
+        if (c === b) continue;
 
         for (const wing2 of twoCand) {
           if (wing2.r === pivot.r && wing2.c === pivot.c) continue;
@@ -787,7 +836,6 @@ export class SudokuEngine {
           if (!wing2.cands.has(b) || !wing2.cands.has(c)) continue;
           if (wing2.cands.size !== 2) continue;
 
-          // Eliminate c from cells that see both wing1 and wing2
           const eliminated: [number, number][] = empty.filter(([r, cc]) => {
             if ((r === wing1.r && cc === wing1.c) || (r === wing2.r && cc === wing2.c)) return false;
             return sees(r, cc, wing1.r, wing1.c) && sees(r, cc, wing2.r, wing2.c) &&
@@ -800,8 +848,10 @@ export class SudokuEngine {
               action: 'eliminate',
               targetCell: [pivot.r, pivot.c],
               digit: c,
+              digits: [a, b, c],
               explanation: `Y-Wing: תא ציר עם {${a},${b}} + שני כנפיים – אפשר למחוק את הספרה ${c} מכל תא הנצפה על ידי שתי הכנפיים`,
-              highlightCells: uniqueCells([[pivot.r, pivot.c], [wing1.r, wing1.c], [wing2.r, wing2.c], ...eliminated]),
+              highlightCells: uniqueCells([[pivot.r, pivot.c], [wing1.r, wing1.c], [wing2.r, wing2.c]]),
+              eliminationCells: uniqueCells([...eliminated]),
             };
           }
         }
@@ -851,8 +901,10 @@ export class SudokuEngine {
                 action: 'eliminate',
                 targetCell: [r1, cols1[0]],
                 digit,
+                digits: [digit],
                 explanation: `Swordfish: הספרה ${digit} מוגבלת לשלוש שורות ושלוש עמודות – אפשר למחוק אותה משאר אותן עמודות`,
-                highlightCells: uniqueCells([...definers, ...eliminated]),
+                highlightCells: uniqueCells([...definers]),
+                eliminationCells: uniqueCells([...eliminated]),
               };
             }
           }
@@ -897,8 +949,10 @@ export class SudokuEngine {
                 action: 'eliminate',
                 targetCell: [rows1[0], c1],
                 digit,
+                digits: [digit],
                 explanation: `Swordfish: הספרה ${digit} מוגבלת לשלוש עמודות ושלוש שורות – אפשר למחוק אותה משאר אותן שורות`,
-                highlightCells: uniqueCells([...definers, ...eliminated]),
+                highlightCells: uniqueCells([...definers]),
+                eliminationCells: uniqueCells([...eliminated]),
               };
             }
           }
@@ -909,7 +963,7 @@ export class SudokuEngine {
   }
 
   /** Fallback: reveal cell with fewest candidates */
-  private fallbackHint(): Hint {
+  private fallbackHint(): Hint | null {
     let best: [number, number] | null = null;
     let bestCount = 10;
 
@@ -921,7 +975,7 @@ export class SudokuEngine {
       }
     }
 
-    if (!best) best = [0, 0];
+    if (!best) return null;
 
     const [r, c] = best;
     const digit = this.solution[r][c];
@@ -931,8 +985,10 @@ export class SudokuEngine {
       action: 'place',
       targetCell: [r, c],
       digit,
+      digits: [digit],
       explanation: 'נסה את התא הזה – יש לו הכי פחות אפשרויות',
       highlightCells: [[r, c]],
+      eliminationCells: [],
     };
   }
 }

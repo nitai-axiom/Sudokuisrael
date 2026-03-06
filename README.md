@@ -1,131 +1,220 @@
-# Sudokuisrael — Game Engine
+# Sudokuisrael
 
-`lib/sudoku-engine.ts` — pure TypeScript, zero dependencies.
-Powers the live Sudoku game client-side in the Next.js app.
+A full-stack Hebrew Sudoku platform for Israeli users. Currently an HTML/CSS/TS prototype — targeting production on **Next.js 14 + Supabase + Vercel**.
 
 ---
 
-## Instantiation
+## Repo Structure
+
+```
+Site_1/
+├── index.html                  # Main responsive game UI prototype (mobile + desktop)
+├── game.html                   # Original reference version (superseded by index.html)
+├── scanner-test.html           # Test harness for the OCR scanner
+│
+├── lib/
+│   ├── sudoku-engine.ts        # Game engine — core logic, hints, undo, timer
+│   └── scanner/                # OCR puzzle scanner (WIP)
+│       ├── types.ts            # Shared types (Point, CellResult, ScanResult)
+│       ├── image-preprocessing.ts
+│       ├── grid-detection.ts
+│       └── perspective-transform.ts
+│
+├── sudoku-generator/           # Rust CLI — generates puzzles + difficulty grading
+│   ├── Cargo.toml
+│   └── src/main.rs
+│
+├── puzzles.json                # Sample generated puzzles (5 easy, 5 medium, 5 hard)
+├── upload_to_supabase.py       # Bulk-insert puzzles into Supabase
+└── .gitignore
+```
+
+---
+
+## Components
+
+### 1. Game Engine — `lib/sudoku-engine.ts`
+
+Zero-dependency TypeScript class. Drop into any project — works in browser and Node.
 
 ```ts
 import { SudokuEngine } from './lib/sudoku-engine';
 
 const engine = new SudokuEngine(puzzleStr, solutionStr);
-// puzzleStr / solutionStr: 81-char strings, '0' or '.' = empty
+// puzzleStr / solutionStr: 81-char strings, '0' or '.' for empty cells
 ```
 
----
-
-## Public API
+**Key API:**
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `getState()` | `GameState` | Full snapshot of current game state |
-| `isGiven(row, col)` | `boolean` | `true` if cell is a pre-filled given |
-| `enterDigit(row, col, digit)` | `MoveResult` | Place a digit; validates against solution |
-| `eraseCell(row, col)` | `void` | Clear a user-entered digit and its notes |
-| `toggleNote(row, col, digit)` | `void` | Toggle a pencil-mark candidate |
-| `getCandidates(row, col)` | `Set<number>` | Valid digits for an empty cell |
-| `getHint()` | `Hint` | Next logical move with Hebrew explanation |
+| `enterDigit(row, col, digit)` | `MoveResult` | Place a digit. Validates against solution. |
+| `eraseCell(row, col)` | `void` | Clear a user cell (won't erase givens or correctly solved cells). |
+| `toggleNote(row, col, digit)` | `void` | Toggle a pencil mark. |
+| `getHint()` | `Hint \| null` | Get a hint using 8 strategies + fallback. Returns `null` if game is over/complete. |
+| `undo()` | `boolean` | Undo last action (digit, erase, or note). Returns `false` if nothing to undo. |
+| `resetPuzzle()` | `void` | Reset the board to its initial state. |
+| `getCandidates(row, col)` | `Set<number>` | Get valid candidates for a cell. |
+| `getState()` | `GameState` | Full snapshot (grids, notes, mistakes, timer, etc). |
+| `isGiven(row, col)` | `boolean` | Is this a pre-filled cell? |
+| `isSolved(row, col)` | `boolean` | Has this cell been correctly filled by the user? |
+| `startTimer()` / `pauseTimer()` | `void` | Control the built-in game timer. |
+| `getElapsed()` | `number` | Get elapsed time in seconds. |
+
+**Game rules:**
+- 3-strike mistake system → `isGameOver`
+- Correctly placed digits cannot be erased
+- Auto-cleanup: placing a digit removes that number from peer notes
+- Completed rows/columns/boxes are detected and reported in `MoveResult.completedUnits`
+- Timer auto-pauses on game over or completion
+
+**Hint strategies (in order):**
+1. **Naked Single** — only one candidate left in a cell
+2. **Hidden Single** — a digit can only go in one place within a unit
+3. **Locked Candidates** — candidates confined to a row/col within a box (pointing pairs/triples + box-line reduction)
+4. **Naked Pair** — two cells in a unit share the same two candidates
+5. **Hidden Pair** — two digits appear in only two cells within a unit
+6. **X-Wing** — a digit appears in exactly two positions in two rows/cols forming a rectangle
+7. **Y-Wing** — pivot + two wings eliminate a common candidate
+8. **Swordfish** — three rows/cols constrain a digit to three columns/rows
+9. **Fallback** — reveals the cell with fewest candidates
+
+All hints include Hebrew explanations. The `Hint` type includes:
+- `action` — `'place'` or `'eliminate'` (tells UI what the hint is about)
+- `targetCell` — where to place/look
+- `digit` / `digits` — the relevant number(s)
+- `highlightCells` — cells that explain the logic
+- `eliminationCells` — cells where candidates can be removed
 
 ---
 
-## Types
+### 2. Puzzle Generator — `sudoku-generator/`
 
-### `GameState`
-```ts
-interface GameState {
-  puzzle:         Grid;         // original givens (0 = empty)
-  solution:       Grid;         // full solution
-  userGrid:       Grid;         // current player state
-  notes:          Notes;        // pencil marks per cell
-  mistakes:       number;       // 0–3
-  hintsUsed:      number;
-  isGameOver:     boolean;      // true when mistakes === 3
-  isComplete:     boolean;      // true when puzzle fully solved
-  completedUnits: Set<string>;  // e.g. 'row-3', 'col-7', 'box-4'
+Rust CLI that generates valid Sudoku puzzles with difficulty grading.
+
+```bash
+cd sudoku-generator
+cargo build --release
+./target/release/sudoku-generator --count 100 --output puzzles.json
+```
+
+Output format per puzzle:
+```json
+{
+  "puzzle": "290000730...",
+  "solution": "296185734...",
+  "difficulty": "easy",
+  "techniques": ["naked_singles", "hidden_singles"],
+  "givens": 23,
+  "generated_at": "2026-03-03T16:16:23.602260+00:00"
 }
 ```
 
-### `MoveResult`
-```ts
-interface MoveResult {
-  correct:        boolean;
-  mistake:        boolean;   // wrong digit entered
-  gameOver:       boolean;   // 3 mistakes reached
-  isComplete:     boolean;   // puzzle fully solved
-  completedUnits: string[];  // units completed by this move
-}
-```
-
-### `Hint`
-```ts
-interface Hint {
-  type:           'naked_single' | 'hidden_single' | 'locked_candidates' | 'naked_pair' | 'fallback';
-  targetCell:     [row, col];
-  digit:          number;
-  explanation:    string;        // Hebrew explanation for the player
-  highlightCells: [row, col][];  // cells to highlight in the UI
-}
-```
+Difficulty is graded by which solving techniques are required:
+- **easy** — naked singles + hidden singles only
+- **medium** — adds locked candidates and/or naked pairs
+- **hard** — adds X-Wing, Swordfish, Jellyfish
 
 ---
 
-## Hint Strategies
+### 3. Supabase Upload — `upload_to_supabase.py`
 
-Applied in priority order until one fires:
+Bulk-inserts puzzles from JSON into Supabase.
 
-| Priority | Strategy | Logic |
-|----------|----------|-------|
-| 1 | **Naked Single** | Only one digit fits in the cell |
-| 2 | **Hidden Single** | A digit has only one valid cell in a row/col/box |
-| 3 | **Locked Candidates** | A digit in a box is confined to one row/col — eliminates it from the rest of that line |
-| 4 | **Naked Pair** | Two cells in a unit share the same two candidates — eliminates those from the rest of the unit |
-| 5 | **Fallback** | Reveals the empty cell with the fewest candidates |
+```bash
+# Setup
+pip install supabase python-dotenv
 
-All hints include a Hebrew `explanation` string and a `highlightCells` list ready for UI rendering.
+# Create .env (NOT committed)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-key
 
----
-
-## Key Behaviours
-
-- **3-strike system** — `mistakes >= 3` sets `isGameOver = true`
-- **Auto-cleanup notes** — placing a digit removes it from all peer cells' pencil marks automatically
-- **Unit completion tracking** — `completedUnits` reports which rows/cols/boxes were completed by each move (use for animations)
-- **Input format** — accepts both `'0'` and `'.'` as empty-cell markers in puzzle strings
-
----
-
-## Usage in Next.js
-
-```ts
-// Keep engine in a ref so it survives re-renders
-const engineRef = useRef<SudokuEngine | null>(null);
-
-useEffect(() => {
-  engineRef.current = new SudokuEngine(puzzle.puzzle, puzzle.solution);
-  setState(engineRef.current.getState());
-}, [puzzle]);
-
-function handleDigit(row: number, col: number, digit: number) {
-  const result = engineRef.current!.enterDigit(row, col, digit);
-  setState(engineRef.current!.getState());
-  if (result.gameOver) showGameOver();
-  if (result.isComplete) showWin();
-}
+# Run
+python upload_to_supabase.py puzzles.json
 ```
 
+Inserts into a `puzzles` table in batches of 50. Expected columns: `puzzle`, `solution`, `difficulty`, `techniques`, `givens`, `created_at` (auto).
+
 ---
 
-## Architecture
+### 4. UI Prototype — `index.html`
 
-Puzzles are sourced from a public dataset and stored in Supabase.
-The engine is the only logic layer — it receives a `puzzle`/`solution` string pair and handles everything from there.
+Single-file responsive HTML/CSS/JS prototype of the game board.
+
+- **Mobile:** `100dvh` no-scroll layout, 1×9 numpad, safe area insets
+- **Desktop (≥900px):** 540px board + 290px input panel side-by-side
+- **Ad slots:** right sidebar at ≥1100px, left at ≥1320px
+- iOS segmented difficulty tabs (mobile) / underline tabs (desktop)
+- Full game logic: select, place, highlight, conflict detection, pencil notes, undo, timer, win modal
+
+Design: white background (#F2F2F7), iOS blue accent (#007AFF), RTL throughout.
+
+---
+
+### 5. OCR Scanner — `lib/scanner/` (WIP)
+
+Camera-based puzzle scanner for importing physical Sudoku puzzles.
+
+- `types.ts` — shared interfaces (`Point`, `CellResult`, `ScanResult`)
+- `image-preprocessing.ts` — grayscale, threshold, noise removal
+- `grid-detection.ts` — find grid contours in image
+- `perspective-transform.ts` — warp grid to square
+- `scanner-test.html` — browser test harness
+
+---
+
+## How It All Connects
 
 ```
-Supabase (puzzles table)
-    ↓ fetch by difficulty / daily / id
-Next.js page
-    ↓ new SudokuEngine(puzzle, solution)
-SudokuEngine  ←→  React UI
+┌─────────────────┐     puzzles.json     ┌──────────────────┐
+│  Rust Generator  │ ──────────────────► │  upload_to_       │
+│  (sudoku-gen)    │                     │  supabase.py      │
+└─────────────────┘                     └────────┬─────────┘
+                                                 │
+                                                 ▼
+                                        ┌────────────────┐
+                                        │   Supabase DB   │
+                                        │  (puzzles table) │
+                                        └────────┬────────┘
+                                                 │ fetch puzzle
+                                                 ▼
+┌─────────────────┐                     ┌────────────────────┐
+│  OCR Scanner     │ ── scan puzzle ──► │   Next.js App       │
+│  (lib/scanner)   │                    │   (index.html now,  │
+└─────────────────┘                     │    Next.js later)   │
+                                        │                     │
+                                        │  ┌───────────────┐  │
+                                        │  │ SudokuEngine   │  │
+                                        │  │ (client-side)  │  │
+                                        │  └───────────────┘  │
+                                        └─────────────────────┘
+```
+
+1. **Generate** puzzles with the Rust CLI → `puzzles.json`
+2. **Upload** to Supabase with the Python script
+3. **Serve** a puzzle to the client (Next.js fetches from Supabase)
+4. **Play** using `SudokuEngine` — all game logic runs client-side
+5. **Scan** (future) — import a physical puzzle via camera
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | Next.js 14 (App Router) + TypeScript + Tailwind CSS |
+| Backend | Supabase (PostgreSQL) |
+| Hosting | Vercel |
+| Puzzle Gen | Rust CLI |
+| Game Logic | `SudokuEngine` (pure TS, zero deps) |
+
+---
+
+## Environment Variables
+
+Create a `.env` file (never commit):
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-key
 ```

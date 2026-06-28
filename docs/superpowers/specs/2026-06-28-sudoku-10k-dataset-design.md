@@ -62,10 +62,13 @@ HOST:       qqwing validate → fun-score → dedupe → sudoku_10000.json
 ## 3. Components
 
 ### A. Container image (`sandbox/Dockerfile`)
-- Debian base + Java runtime only.
-- HoDoKu + SE JARs copied in, used read-only. **No qqwing inside.**
-- Built once. Run with `--network none` and the checkpoint dir bind-mounted for
-  text I/O only.
+- Debian base + Java runtime only. **No JARs baked into the image. No qqwing inside.**
+- Built once. The untrusted JARs enter at **run time** via a **read-only bind mount**
+  from the host (see §6) — they are never downloaded by the container (it has no
+  network) and never written by it. The checkpoint dir is bind-mounted read-write
+  for text I/O only.
+- Run invocation shape:
+  `docker run --network none -v $PWD/sandbox/jars:/opt/jars:ro -v $PWD/<checkpoint>:/work ...`
 
 ### B. Stage 1 — Generate
 
@@ -139,8 +142,19 @@ Extends the existing `puzzles.json` schema (drop-in compatible) with two fields.
 ## 6. Security ritual (one-time, before any run)
 
 1. Download HoDoKu + SE JARs on the host.
-2. **Verify their published SHA-256 hashes.**
-3. Only then bake them read-only into the container image.
+2. **Verify their published SHA-256 hashes** on the host.
+3. Place the verified JARs in `sandbox/jars/`. The container reads them via a
+   **read-only bind mount** at run time (Option A). Nothing is baked into the image;
+   the host stays the single verified source and the container can neither fetch nor
+   alter the JARs.
+
+**Why both the hash and the container** (they defend different things):
+- SHA-256 proves *authenticity* — the JAR is byte-for-byte what the author published
+  (protects against a tampered/corrupted download). It says nothing about whether the
+  authentic code is safe to run.
+- The container provides *containment* — even the genuine, hash-verified JAR is
+  unaudited third-party code; `--network none` + read-only mounts cap what it can do
+  at runtime (no network, no write access to host files).
 
 qqwing stays the Homebrew-installed (distro-signed) binary on the host. It is never
 sourced from inside the untrusted zone.

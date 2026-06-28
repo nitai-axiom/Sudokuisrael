@@ -51,11 +51,12 @@ function dockerRun(args: string[], stdin?: string, expectedResultLines?: number)
     );
 
     proc.stdout.on('data', (d: Buffer) => {
-      const chunk = d.toString();
-      out += chunk;
-      // Early-resolve once we have all expected per-puzzle result lines
+      out += d.toString();
+      // Early-resolve once we have all expected per-puzzle result lines.
+      // Recount over the full accumulated buffer so chunk-split sentences are still counted.
       if (expectedResultLines !== undefined) {
-        for (const line of chunk.split('\n')) {
+        resultLineCount = 0;
+        for (const line of out.split('\n')) {
           if (RESULT_LINE.test(line.trim())) resultLineCount++;
         }
         if (resultLineCount >= expectedResultLines) {
@@ -68,10 +69,12 @@ function dockerRun(args: string[], stdin?: string, expectedResultLines?: number)
 
     proc.on('error', (e: Error) => done(e));
     proc.on('close', (code: number | null) => {
-      // Normal exit (code 0) resolves. SIGKILL (code 137 / null) after early-resolve is ignored.
+      // Only code 0 is a clean natural success. null means killed by an external signal (e.g. OOM)
+      // and must be treated as an error. SIGKILL (code 137 / null) after early-resolve is already
+      // settled and is skipped by the settled guard.
       if (!settled) {
-        if (code !== 0 && code !== null) done(new Error(`docker qqwing exited ${code}`));
-        else done();
+        if (code === 0) done();
+        else done(new Error(`docker qqwing exited ${code ?? 'null (signal kill)'}`));
       }
     });
 

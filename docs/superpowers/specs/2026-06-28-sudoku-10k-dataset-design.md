@@ -30,49 +30,71 @@ The core principle: **untrusted tools propose, the trusted host disposes.** Noth
 produced by the untrusted tools is believed until the trusted host independently
 re-verifies it.
 
-- **Trusted zone = the host Mac.** qqwing (installed via Homebrew, distro-signed)
-  generates the lower tiers and is the independent re-validation gate.
-- **Untrusted zone = a Docker container run with `--network none`.** The two
-  untrusted JARs (HoDoKu, Sudoku Explainer / serate) are quarantined here. The
-  container has no network, the JARs are mounted read-only, and **only plain text
-  files** cross the boundary. Even a hostile JAR cannot phone home or alter the host.
+The host orchestrates everything and runs the pure-TS validation/assembly logic and
+the Rust grader, but the two external sudoku tools each run in their own container.
+Trust is about *provenance*, not host-vs-container:
 
-**qqwing is NOT in the container.** It is the trusted tool; placing it in the
-untrusted zone would defeat the trust split. It runs on the host on both ends.
+- **Trusted qqwing container.** Debian image that `apt`-installs the distro-signed
+  `qqwing` package (network used **only at build time**; run with `--network none`).
+  Generates the lower tiers and is the independent re-validation gate. qqwing is
+  trusted because it is the distro-signed apt binary built from a known Dockerfile —
+  Homebrew has no qqwing formula on macOS, so this container is how we obtain the
+  apt-signed binary the plan always intended.
+- **Untrusted JAR container.** Debian + Java runtime, run with `--network none`. The
+  two untrusted JARs (HoDoKu, Sudoku Explainer / serate) are quarantined here,
+  mounted **read-only**. **Only plain text files** cross any boundary. Even a hostile
+  JAR cannot phone home or alter the host.
+
+The host itself runs: the TS pipeline (dedupe, symmetry check, clue-floor check,
+schema assembly, the driver) and the Rust technique grader (compiled from your own
+source → maximally trusted). The host never runs the untrusted JARs directly.
 
 ### Where each stage runs
 
 | Stage | Tool | Trust | Where |
 |---|---|---|---|
-| 1 — generate very_easy / easy / medium | qqwing (Homebrew) | trusted | host |
-| 1 — generate hard | HoDoKu (JAR) | untrusted | container (`--network none`) |
-| 2 — rate hard | serate / SE (JAR) | untrusted | container (`--network none`) |
-| 3 — validate + fun-score + dedupe + assemble | qqwing (Homebrew) | trusted | host |
+| 1 — generate very_easy / easy / medium | qqwing (apt) | trusted | trusted qqwing container (`--network none`) |
+| 1 — generate hard | HoDoKu (JAR) | untrusted | untrusted JAR container (`--network none`) |
+| 2 — rate hard | serate / SE (JAR) | untrusted | untrusted JAR container (`--network none`) |
+| 3 — validation gate (count-solutions) | qqwing (apt) | trusted | trusted qqwing container (`--network none`) |
+| 3 — fun-score / techniques (lower tiers) | Rust grader | trusted | host |
+| 3 — dedupe / symmetry / clue-floor / assemble | TS pipeline | trusted | host |
 
 ### Data flow
 
 ```
-HOST:       qqwing → very_easy/easy/medium text  ─┐
-CONTAINER:  HoDoKu → hard text → serate → ER nums ─┤  (text files only cross boundary)
-HOST:       qqwing validate → fun-score → dedupe → sudoku_10000.json
+qqwing container → very_easy/easy/medium text  ─┐
+JAR container:    HoDoKu → hard text → serate → ER nums ─┤ (text files only cross boundary)
+HOST (TS + Rust grader + qqwing-container gate) → validate → fun-score → dedupe → sudoku_10000.json
 ```
 
 ---
 
 ## 3. Components
 
-### A. Container image (`sandbox/Dockerfile`)
-- Debian base + Java runtime only. **No JARs baked into the image. No qqwing inside.**
-- Built once. The untrusted JARs enter at **run time** via a **read-only bind mount**
-  from the host (see §6) — they are never downloaded by the container (it has no
-  network) and never written by it. The checkpoint dir is bind-mounted read-write
-  for text I/O only.
-- Run invocation shape:
-  `docker run --network none -v $PWD/sandbox/jars:/opt/jars:ro -v $PWD/<checkpoint>:/work ...`
+### A0. Host language & tooling
+- The host pipeline is **TypeScript**, run with Node's built-in test runner and
+  type-stripping (matches the repo's existing `npm test`, zero new deps). It shells
+  out to `docker run` and the Rust grader via `node:child_process`, and uses
+  `node:crypto` for hash verification and `node:fs` for checkpoints.
+- The Rust **technique grader** is a new `grade` subcommand added to the existing
+  `sudoku-generator` binary (reuses its `StrategySolver` + `strategy_name` map). It
+  reads an 81-char puzzle on stdin and prints the required techniques + difficulty.
+
+### A. Container images (`sandbox/`)
+- **`sandbox/qqwing.Dockerfile`** — Debian + `apt install qqwing`. Network used at
+  build only; run with `--network none`. No JARs.
+- **`sandbox/jars.Dockerfile`** — Debian + Java runtime only. **No JARs baked in, no
+  qqwing.** The untrusted JARs enter at **run time** via a **read-only bind mount**
+  from the host (see §6) — never downloaded by the container (no network) and never
+  written by it. The checkpoint dir is bind-mounted read-write for text I/O only.
+- Run invocation shapes:
+  - `docker run --network none -v $PWD/<checkpoint>:/work qqwing-trusted qqwing ...`
+  - `docker run --network none -v $PWD/sandbox/jars:/opt/jars:ro -v $PWD/<checkpoint>:/work sudoku-jars ...`
 
 ### B. Stage 1 — Generate
 
-- **very_easy / easy / medium** (host, qqwing): `qqwing --generate`,
+- **very_easy / easy / medium** (trusted qqwing container): `qqwing --generate`,
   `--symmetry rotate180`, mapping qqwing's difficulty tiers → our tiers. Unique
   solution and 180° symmetry hold by construction. Output: one text file of puzzle
   strings per tier.
@@ -91,8 +113,8 @@ HOST:       qqwing validate → fun-score → dedupe → sudoku_10000.json
 ### D. Stage 3 — Validate & assemble (host, trusted)
 
 **The gate (mandatory, every hard puzzle):**
-- Re-check with `qqwing --count-solutions` to confirm exactly one solution and
-  independently re-derive it.
+- Re-check with `qqwing --count-solutions` (in the trusted qqwing container) to
+  confirm exactly one solution and independently re-derive it.
 - **Timeout guard**: `count-solutions` hangs on under-constrained grids; bound it
   per puzzle and reject on timeout.
 
@@ -156,8 +178,10 @@ Extends the existing `puzzles.json` schema (drop-in compatible) with two fields.
   unaudited third-party code; `--network none` + read-only mounts cap what it can do
   at runtime (no network, no write access to host files).
 
-qqwing stays the Homebrew-installed (distro-signed) binary on the host. It is never
-sourced from inside the untrusted zone.
+qqwing is the distro-signed apt binary inside its own trusted container (Homebrew has
+no qqwing on macOS). Its image is built from a committed Dockerfile, network is used
+only at build, and it runs `--network none`. It is never sourced from inside the
+untrusted JAR container.
 
 ---
 
@@ -185,8 +209,13 @@ surfaced for a decision *before* it becomes a blocker — not silently worked ar
 | Decision | Choice |
 |---|---|
 | Generation engine | Full qqwing / HoDoKu / SE pipeline (not the existing Rust generator) |
-| Sandbox realization | Docker container, `--network none` (untrusted JARs only) |
-| qqwing placement | Host (trusted) — both generate lower tiers and validate |
+| Sandbox realization | Docker, `--network none`; two images (trusted qqwing, untrusted JARs) |
+| qqwing acquisition | Trusted Debian container, distro-signed apt package (no Homebrew formula on macOS) |
+| qqwing role | Lower-tier generation + the count-solutions validation gate |
+| Host language | TypeScript (Node built-in test runner + type-stripping; zero new deps) |
+| Fun-score / techniques | Reuse existing Rust solver as a host-side `grade` subcommand |
+| JAR delivery | Read-only bind mount at run time (host = single verified source) |
 | Tier split | 2,000 / 3,000 / 3,000 / 2,000 (very_easy / easy / medium / hard) |
 | Hard-tier ER range | 3.4–5.0 (X-wing / swordfish / wings / subsets; no chains) |
 | Record schema | Extend existing schema + `er_rating` + `fun_score` |
+| Build sequencing | Two plans: Plan 1 host-only lower tiers + foundation; Plan 2 hard-tier sandbox |

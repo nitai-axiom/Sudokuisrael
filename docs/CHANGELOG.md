@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-06-28 — Dataset pipeline Plan 1: foundation + lower tiers complete
+**What:** Built the dataset pipeline foundation + all lower-tier generation (very_easy, easy, medium — 8,000 total target records). Two-zone architecture: (1) trusted qqwing Docker container (immutable, `--network none`) for puzzle generation + uniqueness gate; (2) TypeScript host orchestrator + Rust grader for quality gates + technique identification. Implemented resumable per-tier JSONL checkpoints. Rust grader reused with new `--grade` stdin→stdout mode. Schema: puzzle, solution, difficulty, techniques, givens, er_rating (null for lower tiers), fun_score (0–5), generated_at. Verified: `node dataset-pipeline/bin/run-lower.ts --count 20` produced 60 valid records; full test suite 37/37 green.
+**Why:** Plan 1 delivers a working dataset pipeline for the three lower difficulty tiers, proven by end-to-end test and production smoke run.
+**Files touched:**
+- `dataset-pipeline/README.md` — new; full operator guide (prerequisites, smoke run, full run, checkpoints, architecture)
+- `dataset-pipeline/src/` — 11 modules across generation, grading, assembly, checkpointing
+- `dataset-pipeline/bin/run-lower.ts` — orchestrator entry point
+- `dataset-pipeline/tests/` — 10 test files covering all modules (37 tests, all green)
+- `docs/CHANGELOG.md`, `docs/STATUS.md`, `docs/ARCHITECTURE.md` — updated for Plan 1 completion
+**Out of scope (Plan 2):** hard tier generation, serate ER rating, untrusted JAR sandbox.
+
 ## 2026-06-28 — Dataset pipeline Task 5: trusted qqwing container + generate/solve-count wrappers
 **What:** Built the trusted qqwing Docker image (`debian:bookworm-slim` + apt qqwing 1.3.4) and the TypeScript wrappers `generate()` and `solveAndCount()`. Characterised the real qqwing output format — it uses English sentence-form status lines (`The solution to the puzzle is unique.` / `There are N solutions to the puzzle.` / `Puzzle is not possible.`), not bare counts as the brief assumed. Parser adapted to match reality. Added an early-resolve pattern to `dockerRun` to handle macOS Docker Desktop's slow container teardown on stdin-piped operations.
 **Why:** Task 5 of the dataset pipeline plan — provides the puzzle source (qqwing generator) and uniqueness gate (solve+count) for the pipeline.

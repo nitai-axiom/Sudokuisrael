@@ -1,7 +1,7 @@
 # STATUS
 
 **Last updated:** 2026-06-28
-**Phase:** Phase 3 (v1) done — Next.js board playing on the real engine. Phases 1 (cleanup) + 2 (engine fixes + tests) done.
+**Phase:** Phase 3 (v1) done. Dataset pipeline Plan 1 in progress — Task 5 (qqwing container + wrappers) complete.
 
 ## One-line state
 There is now ONE game: a Next.js app in `web/` that plays through the tested engine. The duplicate logic in `index.html` is superseded (kept only as a visual reference until parity is signed off).

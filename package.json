@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests yet — see docs/STATUS.md\" && exit 1"
+    "test": "node --test \"tests/**/*.test.ts\""
   },
   "keywords": [
     "sudoku",
@@ -18,7 +18,7 @@
   ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "devDependencies": {
     "typescript": "^5.9.3"
   }

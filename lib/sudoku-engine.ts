@@ -51,6 +51,7 @@ interface Snapshot {
   userGrid: Grid;
   notes: Notes;
   mistakes: number;
+  timerRunning: boolean;
 }
 
 // ─── Module-level constants ────────────────────────────────────────────────────
@@ -86,7 +87,13 @@ function parseGrid(str: string): Grid {
     grid.push([]);
     for (let c = 0; c < 9; c++) {
       const ch = str[r * 9 + c];
-      grid[r].push(ch === '.' || ch === '0' ? 0 : parseInt(ch, 10));
+      if (ch === '.' || ch === '0') {
+        grid[r].push(0);
+      } else if (ch >= '1' && ch <= '9') {
+        grid[r].push(parseInt(ch, 10));
+      } else {
+        throw new Error(`Invalid grid string: unexpected character '${ch}' at position ${r * 9 + c}`);
+      }
     }
   }
   return grid;
@@ -208,6 +215,7 @@ export class SudokuEngine {
   private userGrid: Grid;
   private notes: Notes;
   private mistakes: number;
+  private readonly maxMistakes = 3;
   private hintsUsed: number;
   private isGameOver: boolean;
   private isComplete: boolean;
@@ -268,6 +276,7 @@ export class SudokuEngine {
       userGrid: cloneGrid(this.userGrid),
       notes: cloneNotes(this.notes),
       mistakes: this.mistakes,
+      timerRunning: this.timerStart !== null,
     });
   }
 
@@ -277,9 +286,14 @@ export class SudokuEngine {
     this.userGrid = snap.userGrid;
     this.notes = snap.notes;
     this.mistakes = snap.mistakes;
-    this.isGameOver = this.mistakes >= 3;
+    this.isGameOver = this.mistakes >= this.maxMistakes;
     this.isComplete = false;
     this.recomputeCompletedUnits();
+    // If this move had paused the timer (e.g. the game-over mistake), and the
+    // game is live again, resume the clock that was running before the move.
+    if (snap.timerRunning && this.timerStart === null && !this.isGameOver) {
+      this.startTimer();
+    }
     return true;
   }
 
@@ -312,7 +326,7 @@ export class SudokuEngine {
       userGrid: cloneGrid(this.userGrid),
       notes: cloneNotes(this.notes),
       mistakes: this.mistakes,
-      maxMistakes: 3,
+      maxMistakes: this.maxMistakes,
       hintsUsed: this.hintsUsed,
       isGameOver: this.isGameOver,
       isComplete: this.isComplete,
@@ -339,7 +353,7 @@ export class SudokuEngine {
 
     if (!correct) {
       this.mistakes++;
-      if (this.mistakes >= 3) {
+      if (this.mistakes >= this.maxMistakes) {
         this.isGameOver = true;
         this.pauseTimer();
       }

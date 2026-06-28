@@ -13,13 +13,14 @@ Found during the 2026-06-28 audit. Engine bugs ENG-1/2/3/5 fixed in Phase 2 (tes
 | ENG-4 | Med | 🔴 | "Eliminate" hints (locked candidates, pairs, X-Wing, Y-Wing, Swordfish) describe eliminations but never mutate notes; assume perfect pencilmarks | Open. Either wire hints to note state or document them as advisory only. Deferred — tied to the hint/notes design. |
 | ENG-5 | Low | ✅ | No tests at all despite the class being pure and trivially testable | Fixed: `tests/engine.test.ts` added (5 tests). Run with `npm test`. More coverage to follow. |
 
-## UI (`index.html`)
+## UI
+The new `web/` Next.js app (Phase 3 v1) resolves all four. These bugs still physically exist in the old `index.html`, but it's superseded and slated for deletion, so they no longer matter.
 | ID | Sev | Status | Bug | Root cause / fix |
 |----|-----|--------|-----|------------------|
-| UI-1 | High | 🔴 | UI uses its own duplicate game logic, not the engine; "hint" needs a hardcoded answer key | Wire UI to `SudokuEngine` (Phase 3, needs approval). |
-| UI-2 | High | 🔴 | Wrong digit is placed but never reverted, and there's no game-over → board can reach unwinnable state with no feedback | Use engine's `enterDigit`/`MoveResult`. |
-| UI-3 | Med | 🔴 | Difficulty tabs reload the same hardcoded puzzle; difficulty is non-functional | Load a puzzle per difficulty from dataset/DB. |
-| UI-4 | Med | 🔴 | `navigator.share?.(…) ?? clipboard` has broken precedence; fragile cross-browser share | Use explicit `if (navigator.share)` else clipboard. |
+| UI-1 | High | ✅ | UI used its own duplicate game logic, not the engine; "hint" needed a hardcoded answer key | Fixed in `web/`: `useSudoku` drives a real `SudokuEngine`; hint uses `engine.getHint()`. |
+| UI-2 | High | ✅ | Wrong digit was placed but never reverted, and there was no game-over → unwinnable board, no feedback | Fixed in `web/`: engine `enterDigit` refuses wrong digits (counts a mistake + flash); game-over modal at 3 mistakes. |
+| UI-3 | Med | ✅ | Difficulty tabs reloaded the same hardcoded puzzle; difficulty was non-functional | Fixed in `web/`: tabs load a real puzzle of that difficulty from `puzzles.json`. |
+| UI-4 | Med | ✅ | `navigator.share?.(…) ?? clipboard` had broken precedence; fragile cross-browser share | Fixed in `web/`: explicit `if (navigator.share)` else clipboard. |
 
 ## Python uploader (`upload_to_supabase.py`)
 | ID | Sev | Status | Bug | Root cause / fix |

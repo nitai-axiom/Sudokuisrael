@@ -4,3 +4,4 @@ dist/
 sudoku-generator/target/
 .env
 .env.local
+.claude/

@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-06-28 — Phase 3 (v1): Next.js rebuild — playable board on the real engine
+**What:** Built a new Next.js front-end in `web/` that plays puzzles through the tested `lib/sudoku-engine.ts`. The new UI has full feature parity with the `index.html` prototype (RTL/Hebrew, iOS look, mobile no-scroll + desktop side panel) but contains **zero game logic** — every action goes to the engine. Difficulty tabs now load real puzzles from `puzzles.json` (the old prototype's tabs were fake).
+**Why:** Phase 3 goal — make the engine the single source of truth and kill the duplicate game logic that lived in `index.html`.
+**Files touched (all new, under `web/`):**
+- Scaffold: `create-next-app` → Next 16 + React 19 + Tailwind v4 + TypeScript, App Router.
+- `web/next.config.ts`: set Turbopack/tracing root to the repo root so `web/` can import the root `lib/` engine and `puzzles.json` directly (one engine, not a copy).
+- `web/tsconfig.json`: added `@engine` → `../lib/sudoku-engine.ts` and `@puzzles` → `../puzzles.json` path aliases.
+- `web/app/globals.css`: ported the prototype's iOS/RTL design tokens + component styles (dropped the ad sidebars — out of scope for v1).
+- `web/app/layout.tsx`: RTL root (`lang="he" dir="rtl"`), Hebrew title, viewport/theme-color.
+- `web/app/lib/puzzles.ts`: loads `puzzles.json`, picks puzzles by difficulty.
+- `web/app/hooks/useSudoku.ts`: the React↔engine bridge — holds one `SudokuEngine`, forwards place/erase/note/undo/hint, runs the timer.
+- `web/app/components/`: Header, DifficultyTabs, GameInfo, Board, InputPanel, CompletionModal, Footer.
+- `web/app/page.tsx`: orchestrator — difficulty state, keyboard input, share, win/game-over modal.
+**Verified:** Playwright smoke test (desktop + mobile) — places correct/wrong digits, notes, hint, undo, difficulty switch, and a full solve that triggers the win modal; zero console errors. `tsc --noEmit` clean. Root engine tests still 5/5 green (unchanged).
+**Not in v1 (later phases):** Supabase, login, ads, OCR scanner, Vercel deploy. `index.html` kept as the visual reference until owner confirms parity, then deleted (recoverable from git).
+
 ## 2026-06-28 — Phase 2: engine bug fixes (test-driven)
 **What:** Fixed 3 engine bugs and added the project's first test suite. All changes written test-first (red → green → refactor).
 **Why:** The engine is the core asset; it had real correctness bugs and zero tests.

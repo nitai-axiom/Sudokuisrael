@@ -16,8 +16,30 @@
 **Decision:** Keep it. Owner chose to finish it later, not cut it. **(Owner decision overrides the tooling recommendation.)**
 **Impact:** Stays in `lib/scanner/`, documented honestly as parked WIP. Not on the critical path to shipping the core game.
 
-## 2026-06-28 — Engine as single source of truth (PENDING)
+## 2026-06-28 — Engine as single source of truth (APPROVED, built in Phase 3 v1)
 **Context:** The game is implemented twice — properly in `lib/sudoku-engine.ts`, and again as weaker inline JS in `index.html`.
 **Options:** (A) make the engine canonical and delete the inline duplicate; (B) keep both; (C) delete the engine, keep inline.
-**Recommendation:** A. The engine is the better implementation and the intended one.
-**Status:** NOT YET APPROVED. This is the Phase 3 architectural decision — needs owner sign-off before work starts.
+**Decision:** A — approved by owner ("lets roll"). Built in Phase 3 v1: the new `web/` Next.js app plays through the engine; no game logic in the UI.
+**Impact:** One implementation going forward. `index.html`'s inline logic is now superseded; the file is deleted once owner confirms visual parity.
+
+## 2026-06-28 — Phase 3: where the Next.js app lives
+**Context:** Needed a home for the new front-end without tangling Next's config into the working Rust/Python/test setup.
+**Options:** (A) new `web/` folder, engine stays at repo root and is imported; (B) turn the repo root into the Next app.
+**Decision:** A — `web/` folder. Engine, Rust generator, Python uploader, `puzzles.json`, and tests stay untouched at the root; only the front-end is new. Turbopack's workspace root is pointed at the repo root so `web/` imports the root engine/puzzles directly (no copy).
+**Impact:** Small blast radius. The one engine is imported, never duplicated.
+
+## 2026-06-28 — Phase 3: styling approach (port the prototype CSS, not a full utility rewrite)
+**Context:** The plan said "rebuilt in Tailwind." The prototype has ~800 lines of finely-tuned, responsive, RTL, iOS-styled CSS.
+**Options:** (A) port the proven design-token CSS into `globals.css` and reference it from components; (B) rewrite every rule as Tailwind utility classes.
+**Decision:** A — Tailwind v4 is set up and used, but the design system itself is the ported CSS. A full utility rewrite would be churn with real regression risk and no visual gain ("lean by design" was an explicit v1 principle).
+**Impact:** Pixel parity achieved fast and safely. Tailwind utilities are available for future components.
+
+## 2026-06-28 — Phase 3: difficulty tabs = 3 levels (dropped "expert")
+**Context:** The prototype had 4 tabs (קל/בינוני/קשה/מומחה) but `puzzles.json` only has easy/medium/hard.
+**Decision:** Ship 3 real tabs so difficulty actually loads a matching puzzle. "Expert" returns when the dataset has expert puzzles.
+**Impact:** Difficulty is now functional instead of fake. One fewer (empty) tab than the prototype.
+
+## 2026-06-28 — Phase 3: hint behaviour in v1 (reveal a cell)
+**Context:** `engine.getHint()` returns the smartest next step, but "eliminate" hints describe note removals the engine can't apply yet (ENG-4 is open).
+**Decision:** For v1, the hint button asks the engine which cell to act on, then reveals that cell's correct value (undoable, counts as a hint). Simple and always useful.
+**Impact:** Hint always advances the board. Richer technique-explaining hints wait on ENG-4 (the hint/notes design).

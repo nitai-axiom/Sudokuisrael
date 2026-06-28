@@ -1,32 +1,34 @@
 # STATUS
 
 **Last updated:** 2026-06-28
-**Phase:** Prototype → stabilization. Phase 1 (cleanup) + Phase 2 (engine fixes + tests) done.
+**Phase:** Phase 3 (v1) done — Next.js board playing on the real engine. Phases 1 (cleanup) + 2 (engine fixes + tests) done.
 
 ## One-line state
-Good game engine + working Rust generator, wrapped in duplicated/half-built scaffolding. Core works; not production-ready.
+There is now ONE game: a Next.js app in `web/` that plays through the tested engine. The duplicate logic in `index.html` is superseded (kept only as a visual reference until parity is signed off).
 
 ## What's working
 | Component | State | Notes |
 |---|---|---|
-| Rust puzzle generator (`sudoku-generator/`) | ✅ Works | Strongest piece. Compiles, generates graded puzzles. |
-| Game engine (`lib/sudoku-engine.ts`) | ✅ Works, tested | Real logic + hints. Phase 2 fixed ENG-1/2/3; 5 tests (`npm test`). ENG-4 (hint/notes) still open. |
-| UI prototype (`index.html`) | ⚠️ Works, but not wired to engine | Good look (RTL/Hebrew/mobile). Contains its own duplicate game logic. |
-| Python uploader (`upload_to_supabase.py`) | ⚠️ Works once, by hand | No retries/idempotency. See BUGS.md. |
-| OCR scanner (`lib/scanner/`) | 🟥 WIP ~30% | Image helpers only. No grid detection, no digit recognition. Parked. |
+| Next.js app (`web/`) | ✅ v1 playable | Real engine, RTL/Hebrew, mobile + desktop. Difficulty loads real puzzles. Verified by browser smoke test. |
+| Game engine (`lib/sudoku-engine.ts`) | ✅ Works, tested | Now the single source of game logic. 5 tests (`npm test`). ENG-4 (hint/notes) still open. |
+| Rust puzzle generator (`sudoku-generator/`) | ✅ Works | Unchanged. Generates graded puzzles. |
+| `index.html` prototype | ⚠️ Superseded | Kept as visual reference only. Delete once owner confirms parity (RS/UI bugs in it no longer matter). |
+| Python uploader (`upload_to_supabase.py`) | ⚠️ Works once, by hand | Unchanged. See BUGS.md (PY-1/2/3). |
+| OCR scanner (`lib/scanner/`) | 🟥 WIP ~30% | Parked. |
 
 ## In progress
-- Nothing actively in progress. Phase 1 just completed.
+- Nothing actively in progress. Phase 3 v1 just completed.
 
 ## Blocked / decisions needed
-- **Phase 3 (architectural):** wire UI to the engine and delete the duplicate game logic in `index.html`. Needs sign-off before starting.
+- **Delete `index.html`?** v1 has reached parity. Awaiting owner OK to delete it (recoverable from git). This is the final step that makes "one implementation" literal.
 
 ## Next steps
 | # | Step | Phase |
 |---|------|-------|
-| 1 | ~~Fix engine bugs + add a test suite~~ ✅ done | 2 |
-| 2 | Wire `index.html` UI to `SudokuEngine`, delete duplicate logic | 3 (needs approval) |
-| 3 | Load puzzles from `puzzles.json`/Supabase instead of hardcoded board | 3 |
-| 4 | Harden Python uploader (retries, idempotent upsert) | 4 |
-| 5 | Resolve ENG-4 (decide if hints mutate notes) | 2/3 |
-| 6 | Resume OCR scanner (grid detection + digit recognition) | later |
+| 1 | ~~Wire UI to `SudokuEngine`, load real puzzles per difficulty~~ ✅ done (web/) | 3 |
+| 2 | Confirm parity → delete `index.html` | 3 (needs OK) |
+| 3 | Resolve ENG-4 (decide if hints mutate notes) → richer hints | 2/3 |
+| 4 | Supabase: fetch puzzles from DB instead of bundled `puzzles.json` | 4 |
+| 5 | Harden Python uploader (retries, idempotent upsert) | 4 |
+| 6 | Deploy to Vercel; login/accounts; ads | later |
+| 7 | Resume OCR scanner (grid detection + digit recognition) | later |

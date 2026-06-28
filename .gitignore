@@ -1,3 +1,6 @@
 node_modules/
 dist/
 .DS_Store
+sudoku-generator/target/
+.env
+.env.local

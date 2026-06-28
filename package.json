@@ -1,15 +1,21 @@
 {
   "name": "sudoku-pipeline",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Hebrew Sudoku platform: TS game engine, Rust puzzle generator, static HTML UI prototype.",
+  "main": "dist/sudoku-engine.js",
   "directories": {
     "lib": "lib"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"No tests yet — see docs/STATUS.md\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "sudoku",
+    "hebrew",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

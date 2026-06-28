@@ -1,23 +1,20 @@
 # Sudokuisrael
 
-A full-stack Hebrew Sudoku platform for Israeli users. Currently an HTML/CSS/TS prototype — targeting production on **Next.js 14 + Supabase + Vercel**.
+A Hebrew Sudoku platform for Israeli users. **Status: prototype.** The game engine and Rust generator work; the UI is a static HTML prototype. Production target (**Next.js 14 + Supabase + Vercel**) is aspirational and not yet built. See [docs/STATUS.md](docs/STATUS.md) for the honest current state.
 
 ---
 
 ## Repo Structure
 
 ```
-Site_1/
-├── index.html                  # Main responsive game UI prototype (mobile + desktop)
-├── game.html                   # Original reference version (superseded by index.html)
-├── scanner-test.html           # Test harness for the OCR scanner
+sudoku-pipeline/
+├── index.html                  # Responsive game UI prototype (mobile + desktop)
 │
 ├── lib/
 │   ├── sudoku-engine.ts        # Game engine — core logic, hints, undo, timer
-│   └── scanner/                # OCR puzzle scanner (WIP)
+│   └── scanner/                # OCR puzzle scanner (WIP ~30%, parked)
 │       ├── types.ts            # Shared types (Point, CellResult, ScanResult)
 │       ├── image-preprocessing.ts
-│       ├── grid-detection.ts
 │       └── perspective-transform.ts
 │
 ├── sudoku-generator/           # Rust CLI — generates puzzles + difficulty grading
@@ -26,7 +23,19 @@ Site_1/
 │
 ├── puzzles.json                # Sample generated puzzles (5 easy, 5 medium, 5 hard)
 ├── upload_to_supabase.py       # Bulk-insert puzzles into Supabase
+├── tsconfig.json               # TypeScript build config
+├── docs/                       # Project docs (STATUS, BUGS, DECISIONS, …)
 └── .gitignore
+```
+
+> **Note:** `index.html` currently runs its own inline game logic and does **not** use `lib/sudoku-engine.ts`. Unifying them is planned — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+### Build
+
+```bash
+npm install
+npm run build      # compile lib/*.ts → dist/
+npm run typecheck  # type-check only
 ```
 
 ---
@@ -151,15 +160,16 @@ Design: white background (#F2F2F7), iOS blue accent (#007AFF), RTL throughout.
 
 ---
 
-### 5. OCR Scanner — `lib/scanner/` (WIP)
+### 5. OCR Scanner — `lib/scanner/` (WIP ~30%, parked)
 
-Camera-based puzzle scanner for importing physical Sudoku puzzles.
+Intended as a camera-based scanner for importing physical Sudoku puzzles. **Currently only image-processing primitives exist** — there is no grid detection and no digit recognition yet, and nothing imports it. Not on the critical path; parked until the core game ships.
 
+What exists today:
 - `types.ts` — shared interfaces (`Point`, `CellResult`, `ScanResult`)
 - `image-preprocessing.ts` — grayscale, threshold, noise removal
-- `grid-detection.ts` — find grid contours in image
-- `perspective-transform.ts` — warp grid to square
-- `scanner-test.html` — browser test harness
+- `perspective-transform.ts` — warp a grid quad to a square (needs corner detection to feed it)
+
+Still missing: corner/grid detection, cell segmentation, the digit-recognition (OCR) model, and an end-to-end orchestrator + UI entry point.
 
 ---
 

@@ -56,7 +56,7 @@ struct GradeOutput {
 /// Grade a single 81-char puzzle line (blanks as '0' or '.').
 fn grade_line(line: &str) -> GradeOutput {
     let trimmed = line.trim();
-    if trimmed.len() != 81 {
+    if trimmed.chars().count() != 81 {
         return GradeOutput { solvable: false, difficulty: None, techniques: vec![] };
     }
     // Normalize '.' → '0' for the sudoku crate.
@@ -369,5 +369,13 @@ mod tests {
         let out = grade_line("123");
         assert!(!out.solvable);
         assert_eq!(out.difficulty, None);
+    }
+
+    #[test]
+    fn grade_line_accepts_dot_notation() {
+        let dotted: String = EASY_PUZZLE.chars().map(|c| if c == '0' { '.' } else { c }).collect();
+        let out = grade_line(&dotted);
+        assert!(out.solvable, "dotted blanks should grade identically to zero blanks");
+        assert_eq!(out.difficulty.as_deref(), grade_line(EASY_PUZZLE).difficulty.as_deref());
     }
 }

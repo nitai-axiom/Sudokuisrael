@@ -33,3 +33,10 @@ The new `web/` Next.js app (Phase 3 v1) resolves all four. These bugs still phys
 | ID | Sev | Status | Bug | Root cause / fix |
 |----|-----|--------|-----|------------------|
 | RS-1 | Med | 🔴 | "Hard" generation uses generate-then-reject (~1,749 attempts per 3 hard puzzles); `--count 100 --difficulty hard` is very slow | Generate once, grade once, bucket into all tiers in one pass. |
+
+## Dataset pipeline (`dataset-pipeline/`)
+Found during the first full 8,000-puzzle run (2026-06-29). Both fixed test-driven + reviewed.
+| ID | Sev | Status | Bug | Root cause / fix |
+|----|-----|--------|-----|------------------|
+| DP-1 | High | ✅ | Full run aborted on first batch with `qqwing docker timeout` | Single fixed 30s timeout applied to every docker call, but `generate` at batch 200 takes 70–103s (qqwing rejection-samples difficulty; `simple` is slowest). Fix (commit 77c4bb4): batch-scaled timeouts (`genTimeoutMs`/`solveTimeoutMs`) + fault-tolerant `buildTier` (try/catch retry, abort only after `MAX_CONSECUTIVE_BATCH_FAILURES=5`). |
+| DP-2 | High | ✅ | qqwing containers leaked under Colima — ~6% CPU each, 34 orphaned, unbounded; starved the VM and caused DP-1 timeouts | Early-resolve SIGKILLed the docker *client*, but under Colima that orphans the *container* (`--rm` is client-driven, never fires). Fix (commit e1ed538): name each run `qqwing-<uuid>` + `docker stop -t 0 <name>` teardown on settle. Verified: peak 1 concurrent container, 0 leftover. |

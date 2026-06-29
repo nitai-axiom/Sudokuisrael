@@ -1,0 +1,36 @@
+# HoDoKu characterization fixture — captured 2026-06-29 on Colima arm64 VM.
+# Command: docker run --rm -i --network none sudoku-jars java -jar /opt/hodoku.jar /s /sc bf2 /o stdout
+#          with -i flag (stdin kept open as open pipe) and stopped after ~5 seconds.
+#
+# Output shape:
+#   <81-char puzzle string with '.' for blanks> # <technique-path>
+#
+# Technique-path format: space-separated tokens where:
+#   - 'x'    = any/arbitrary steps allowed here
+#   - 'ssts' = SSTS steps (singles, hidden/naked pairs/triples, locked cands, basic fish, XY-Wing, etc.)
+#   - 's'    = singles only
+#   - 'bf2(N)' = X-Wing with N eliminations
+#   - 'bf3(N)' = Swordfish with N eliminations
+#   - etc.
+#
+# Multiple lines for the same puzzle string are normal: each line describes a different
+# technique path through that puzzle's solution space.
+#
+# Native 180° symmetry: NOT SUPPORTED by HoDoKu CLI.
+#   Confirmed via bytecode inspection: SearchForTypeThread.run() calls
+#   generator.generateSudoku(false) — symmetry=false is hardcoded; no CLI flag exists.
+#   Task 4's acceptHard isSymmetric180 gate post-filters symmetry.
+#
+# Technique-forcing: YES — /sc bf2 forces X-Wing (bf2) to appear in puzzle path.
+#   Other options: bf3 (Swordfish), xy (XY-Wing), n2 (Naked Pair), etc.
+#   However: same puzzle appears with multiple technique paths so parsers DEDUPE by puzzle string.
+#
+# Termination: HoDoKu reads from stdin (blocks); runs until stdin closes or EOF.
+#   Requires docker run -i (--interactive) flag to keep stdin open.
+#   Without -i: stdin is /dev/null, readLine() returns null immediately, 0 puzzles generated.
+#
+..3...62..........8..9..1......41.3..4.7.9..89..5......72.....451.6..2.......8... # ssts bf2(6) s
+9..71.....4.........58.................6.2.4.8.13..6..1.345...87...8..32......... # ssts bf2(1) x
+..8.572...5.4...7.........583....6.9.12........42..3.....8.....9..61......6.248.. # ssts bf2(4) x bf2(2) x
+5...6......71.2..89......3..6....5.......394174..........98.....78..........452.. # ssts bf2(2) x
+..3.89..............7...1.69..3..5...7...5.19.8.....6..5..6743..3.5.....4.61..... # x bf2(2) s

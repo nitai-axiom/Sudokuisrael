@@ -1,9 +1,13 @@
 import fs from 'node:fs';
-import { TIERS, OUTPUT_LOWER, type Tier } from './config.ts';
+import path from 'node:path';
+import { LOWER_TIERS, OUTPUT_LOWER, type Tier } from './config.ts';
 import { buildTier } from './pipeline.ts';
+import { buildHardTier } from './hard-pipeline.ts';
 import type { PuzzleRecord } from './record.ts';
 
-const TIER_ORDER: Record<Tier, number> = { very_easy: 0, easy: 1, medium: 2 };
+export const OUTPUT_FULL = path.join(path.dirname(OUTPUT_LOWER), 'sudoku_10000.json');
+
+const TIER_ORDER: Record<Tier, number> = { very_easy: 0, easy: 1, medium: 2, hard: 3 };
 
 export function sortRecords(rows: PuzzleRecord[]): PuzzleRecord[] {
   return [...rows].sort((a, b) => {
@@ -15,12 +19,24 @@ export function sortRecords(rows: PuzzleRecord[]): PuzzleRecord[] {
 
 export async function assembleLower(opts?: { target?: number; now?: () => string }): Promise<PuzzleRecord[]> {
   const all: PuzzleRecord[] = [];
-  for (const tier of TIERS) {
+  for (const tier of LOWER_TIERS) {
     const rows = await buildTier(tier, { target: opts?.target, now: opts?.now });
     all.push(...rows);
   }
   const sorted = sortRecords(all);
   fs.writeFileSync(OUTPUT_LOWER, JSON.stringify(sorted, null, 2));
   process.stderr.write(`wrote ${sorted.length} records → ${OUTPUT_LOWER}\n`);
+  return sorted;
+}
+
+export async function assembleAll(opts?: { target?: number; now?: () => string }): Promise<PuzzleRecord[]> {
+  const all: PuzzleRecord[] = [];
+  for (const tier of LOWER_TIERS) {
+    all.push(...await buildTier(tier, { target: opts?.target, now: opts?.now }));
+  }
+  all.push(...await buildHardTier({ target: opts?.target, now: opts?.now }));
+  const sorted = sortRecords(all);
+  fs.writeFileSync(OUTPUT_FULL, JSON.stringify(sorted, null, 2));
+  process.stderr.write(`wrote ${sorted.length} records → ${OUTPUT_FULL}\n`);
   return sorted;
 }

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {
   QQWING_IMAGE, QQWING_DIFFICULTY, WORK_DIR,
   SOLVE_TIMEOUT_MS, GEN_TIMEOUT_PER_PUZZLE_MS, GEN_TIMEOUT_FLOOR_MS, SOLVE_TIMEOUT_PER_PUZZLE_MS,
-  type Tier,
+  type LowerTier,
 } from './config.ts';
 import { normalizeBlanks } from './grid.ts';
 
@@ -115,8 +115,8 @@ function dockerRun(args: string[], timeoutMs: number, stdin?: string, expectedRe
   });
 }
 
-/** Generate n puzzles for a tier via the trusted qqwing container. */
-export async function generate(tier: Tier, n: number): Promise<string[]> {
+/** Generate n puzzles for a lower tier via the trusted qqwing container. Hard uses generateHard() instead. */
+export async function generate(tier: LowerTier, n: number): Promise<string[]> {
   fs.mkdirSync(WORK_DIR, { recursive: true });
   const diff = QQWING_DIFFICULTY[tier];
   const raw = await dockerRun([

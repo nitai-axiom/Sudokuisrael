@@ -1,4 +1,4 @@
-import { TARGETS, EXPECTED_GRADE, BATCH_SIZE, MAX_CONSECUTIVE_BATCH_FAILURES, type Tier } from './config.ts';
+import { TARGETS, EXPECTED_GRADE, BATCH_SIZE, MAX_CONSECUTIVE_BATCH_FAILURES, type LowerTier } from './config.ts';
 import { isSymmetric180, passesClueFloor } from './grid.ts';
 import { generate, solveAndCount, type SolveResult } from './qqwing.ts';
 import { gradeBatch, type Grade } from './grader.ts';
@@ -7,9 +7,9 @@ import { buildRecord, validateRecord, type PuzzleRecord } from './record.ts';
 import { loadCheckpoint, appendCheckpoint } from './checkpoint.ts';
 import { dedupeByPuzzle } from './dedupe.ts';
 
-/** Pure acceptance gate for one candidate. Returns the record or null (rejected). */
+/** Pure acceptance gate for one lower-tier candidate. Returns the record or null (rejected). */
 export function acceptPuzzle(args: {
-  tier: Tier; solve: SolveResult; grade: Grade; now: string;
+  tier: LowerTier; solve: SolveResult; grade: Grade; now: string;
 }): PuzzleRecord | null {
   const { tier, solve, grade, now } = args;
 
@@ -36,8 +36,8 @@ export function acceptPuzzle(args: {
   return record;
 }
 
-/** Over-generation loop for one tier; resumes from checkpoint until target survivors. */
-export async function buildTier(tier: Tier, opts?: {
+/** Over-generation loop for one lower tier; resumes from checkpoint until target survivors. */
+export async function buildTier(tier: LowerTier, opts?: {
   target?: number;
   now?: () => string;
   generate?: typeof generate;

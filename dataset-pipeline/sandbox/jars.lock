@@ -1,0 +1,7 @@
+# jars.lock — pinned untrusted-tool artifacts (acquired + verified in-container, never on host)
+# HoDoKu: downloaded JAR, integrity = SHA-256
+HODOKU_URL=https://downloads.sourceforge.net/project/hodoku/hodoku/hodoku_2.2.0/hodoku.jar
+HODOKU_SHA256=6e5f0c865b6915acf9fa688eb0e43588139ef40d7375b0965677be5fe42294bc
+# serate: built from source, integrity = pinned commit SHA
+SERATE_REPO=https://github.com/SudokuMonster/SukakuExplainer.git
+SERATE_COMMIT=362854eea4e983017726d406ac9ee8a28909bcc7

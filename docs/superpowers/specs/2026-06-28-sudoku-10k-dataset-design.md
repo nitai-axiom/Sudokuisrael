@@ -84,13 +84,15 @@ HOST (TS + Rust grader + qqwing-container gate) → validate → fun-score → d
 ### A. Container images (`sandbox/`)
 - **`sandbox/qqwing.Dockerfile`** — Debian + `apt install qqwing`. Network used at
   build only; run with `--network none`. No JARs.
-- **`sandbox/jars.Dockerfile`** — Debian + Java runtime only. **No JARs baked in, no
-  qqwing.** The untrusted JARs enter at **run time** via a **read-only bind mount**
-  from the host (see §6) — never downloaded by the container (no network) and never
-  written by it. The checkpoint dir is bind-mounted read-write for text I/O only.
+- **`sandbox/jars.Dockerfile`** — **multi-stage** build (no qqwing). A *fetch stage*
+  (network only at build) downloads HoDoKu + SE and hash-verifies them **inside the
+  build** (`sha256sum -c`); a *runtime stage* (Debian + Java) copies in only the
+  verified JARs. The untrusted JARs never touch the host — they exist only inside
+  Docker layers. Run with `--network none`; only the checkpoint dir is bind-mounted
+  (read-write) for text I/O. See §6.
 - Run invocation shapes:
   - `docker run --network none -v $PWD/<checkpoint>:/work qqwing-trusted qqwing ...`
-  - `docker run --network none -v $PWD/sandbox/jars:/opt/jars:ro -v $PWD/<checkpoint>:/work sudoku-jars ...`
+  - `docker run --network none -v $PWD/<checkpoint>:/work sudoku-jars ...`
 
 ### B. Stage 1 — Generate
 
@@ -161,22 +163,30 @@ Extends the existing `puzzles.json` schema (drop-in compatible) with two fields.
 
 ---
 
-## 6. Security ritual (one-time, before any run)
+## 6. Security ritual — everything stays in the sandbox
 
-1. Download HoDoKu + SE JARs on the host.
-2. **Verify their published SHA-256 hashes** on the host.
-3. Place the verified JARs in `sandbox/jars/`. The container reads them via a
-   **read-only bind mount** at run time (Option A). Nothing is baked into the image;
-   the host stays the single verified source and the container can neither fetch nor
-   alter the JARs.
+**Hard rule: the untrusted HoDoKu/SE JARs never touch the host.** The host never
+downloads, stores, verifies, or runs them. The host only ever issues `docker build`
+and `docker run`. All acquisition, verification, and execution happen inside Docker.
+
+1. **Fetch + verify inside the build.** `sandbox/jars.Dockerfile` is multi-stage. The
+   fetch stage `curl`s each JAR from its official source (network available *only*
+   during build) and immediately checks it against a pinned SHA-256 with
+   `sha256sum -c` — a mismatch fails the build. The pinned hashes live in a committed
+   `sandbox/jars.lock` (recorded the first time each JAR is acquired, inside a
+   throwaway networked container — never on the host).
+2. **Runtime stage** copies only the verified JARs into a Debian + Java image.
+3. **Run offline.** All HoDoKu/serate execution runs `docker run --network none`; the
+   JARs cannot reach the network and the host filesystem is never bind-mounted into
+   them except the read-write checkpoint dir for text I/O.
 
 **Why both the hash and the container** (they defend different things):
 - SHA-256 proves *authenticity* — the JAR is byte-for-byte what the author published
   (protects against a tampered/corrupted download). It says nothing about whether the
   authentic code is safe to run.
 - The container provides *containment* — even the genuine, hash-verified JAR is
-  unaudited third-party code; `--network none` + read-only mounts cap what it can do
-  at runtime (no network, no write access to host files).
+  unaudited third-party code; `--network none` caps what it can do at runtime (no
+  network, no write access to host files beyond the text checkpoint dir).
 
 qqwing is the distro-signed apt binary inside its own trusted container (Homebrew has
 no qqwing on macOS). Its image is built from a committed Dockerfile, network is used
@@ -214,7 +224,7 @@ surfaced for a decision *before* it becomes a blocker — not silently worked ar
 | qqwing role | Lower-tier generation + the count-solutions validation gate |
 | Host language | TypeScript (Node built-in test runner + type-stripping; zero new deps) |
 | Fun-score / techniques | Reuse existing Rust solver as a host-side `grade` subcommand |
-| JAR delivery | Read-only bind mount at run time (host = single verified source) |
+| JAR delivery | In-container fetch + `sha256sum -c` verify in a multi-stage build; JARs never touch the host |
 | Tier split | 2,000 / 3,000 / 3,000 / 2,000 (very_easy / easy / medium / hard) |
 | Hard-tier ER range | 3.4–5.0 (X-wing / swordfish / wings / subsets; no chains) |
 | Record schema | Extend existing schema + `er_rating` + `fun_score` |

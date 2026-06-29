@@ -26,6 +26,10 @@ struct Args {
     /// Write output JSON to this file (default: stdout)
     #[arg(short, long)]
     output: Option<String>,
+
+    /// Grade puzzles read from stdin (one 81-char puzzle per line); print one JSON line each.
+    #[arg(long, default_value_t = false)]
+    grade: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +44,39 @@ struct PuzzleRecord {
     techniques: Vec<String>,
     givens: usize,
     generated_at: String,
+}
+
+#[derive(Serialize)]
+struct GradeOutput {
+    solvable: bool,
+    difficulty: Option<String>,
+    techniques: Vec<String>,
+}
+
+/// Grade a single 81-char puzzle line (blanks as '0' or '.').
+fn grade_line(line: &str) -> GradeOutput {
+    let trimmed = line.trim();
+    if trimmed.chars().count() != 81 {
+        return GradeOutput { solvable: false, difficulty: None, techniques: vec![] };
+    }
+    // Normalize '.' → '0' for the sudoku crate.
+    let normalized: String = trimmed.chars().map(|c| if c == '.' { '0' } else { c }).collect();
+    let sudoku = match Sudoku::from_str_line(&normalized) {
+        Ok(s) => s,
+        Err(_) => return GradeOutput { solvable: false, difficulty: None, techniques: vec![] },
+    };
+    let solver = StrategySolver::from_sudoku(sudoku);
+    match solver.solve(&all_strategies()) {
+        Ok((solved, deductions)) => {
+            // Confirm the strategies produced a *complete* solution (no backtracking).
+            if solved.to_bytes().iter().any(|&b| b == 0) {
+                return GradeOutput { solvable: false, difficulty: None, techniques: vec![] };
+            }
+            let (difficulty, techniques) = grade_techniques(&deductions);
+            GradeOutput { solvable: true, difficulty: Some(difficulty.as_str().to_string()), techniques }
+        }
+        Err(_) => GradeOutput { solvable: false, difficulty: None, techniques: vec![] },
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +285,21 @@ fn generate_for_tier(target: Option<Difficulty>, count: usize, label: &str) -> V
 fn main() {
     let args = Args::parse();
 
+    if args.grade {
+        use std::io::BufRead;
+        let stdin = std::io::stdin();
+        let stdout = std::io::stdout();
+        let mut out = stdout.lock();
+        for line in stdin.lock().lines() {
+            let line = match line { Ok(l) => l, Err(_) => continue };
+            if line.trim().is_empty() { continue; }
+            let graded = grade_line(&line);
+            let json = serde_json::to_string(&graded).expect("serialize grade output");
+            writeln!(out, "{json}").expect("write grade output");
+        }
+        return;
+    }
+
     // Validate --difficulty if provided.
     let target_difficulty: Option<Difficulty> = if let Some(ref s) = args.difficulty {
         match Difficulty::from_str(s) {
@@ -293,5 +345,37 @@ fn main() {
         None => {
             println!("{json}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A puzzle solvable with only singles → easy.
+    const EASY_PUZZLE: &str =
+        "070000043040009610800634900094052000358460020000800530080070091902100005007040802";
+
+    #[test]
+    fn grade_line_reports_solvable_easy_or_harder() {
+        let out = grade_line(EASY_PUZZLE);
+        assert!(out.solvable, "expected a logic-solvable puzzle");
+        assert!(!out.techniques.is_empty(), "expected at least one technique");
+        assert!(matches!(out.difficulty.as_deref(), Some("easy") | Some("medium") | Some("hard")));
+    }
+
+    #[test]
+    fn grade_line_rejects_garbage_length() {
+        let out = grade_line("123");
+        assert!(!out.solvable);
+        assert_eq!(out.difficulty, None);
+    }
+
+    #[test]
+    fn grade_line_accepts_dot_notation() {
+        let dotted: String = EASY_PUZZLE.chars().map(|c| if c == '0' { '.' } else { c }).collect();
+        let out = grade_line(&dotted);
+        assert!(out.solvable, "dotted blanks should grade identically to zero blanks");
+        assert_eq!(out.difficulty.as_deref(), grade_line(EASY_PUZZLE).difficulty.as_deref());
     }
 }

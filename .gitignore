@@ -5,3 +5,7 @@ sudoku-generator/target/
 .env
 .env.local
 .claude/
+dataset-pipeline/.work/
+dataset-pipeline/checkpoints/
+sudoku_lower.json
+sudoku_10000.json

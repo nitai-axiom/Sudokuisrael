@@ -48,6 +48,12 @@ export async function buildTier(tier: Tier, opts?: { target?: number; now?: () =
     const puzzles = await generate(tier, Math.min(BATCH_SIZE, Math.max(need, 50)));
     const [solves, grades] = await Promise.all([solveAndCount(puzzles), gradeBatch(puzzles)]);
 
+    if (solves.length !== puzzles.length || grades.length !== puzzles.length) {
+      throw new Error(
+        `wrapper length mismatch: ${puzzles.length} puzzles, ${solves.length} solves, ${grades.length} grades`,
+      );
+    }
+
     const accepted: PuzzleRecord[] = [];
     for (let i = 0; i < puzzles.length; i++) {
       const r = acceptPuzzle({ tier, solve: solves[i], grade: grades[i], now: now() });

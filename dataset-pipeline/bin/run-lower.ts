@@ -2,7 +2,15 @@ import { assembleLower } from '../src/assemble.ts';
 
 const argv = process.argv.slice(2);
 const ci = argv.indexOf('--count');
-const target = ci >= 0 ? Number(argv[ci + 1]) : undefined;
+let target: number | undefined;
+if (ci >= 0) {
+  const n = Number(argv[ci + 1]);
+  if (!Number.isInteger(n) || n <= 0) {
+    console.error('error: --count requires a positive integer, e.g. --count 20');
+    process.exit(1);
+  }
+  target = n;
+}
 
 assembleLower({ target }).then(
   (rows) => { process.stderr.write(`done: ${rows.length} records\n`); },

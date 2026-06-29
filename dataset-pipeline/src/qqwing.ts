@@ -1,7 +1,21 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { QQWING_IMAGE, QQWING_DIFFICULTY, WORK_DIR, SOLVE_TIMEOUT_MS, type Tier } from './config.ts';
+import {
+  QQWING_IMAGE, QQWING_DIFFICULTY, WORK_DIR,
+  SOLVE_TIMEOUT_MS, GEN_TIMEOUT_PER_PUZZLE_MS, GEN_TIMEOUT_FLOOR_MS, SOLVE_TIMEOUT_PER_PUZZLE_MS,
+  type Tier,
+} from './config.ts';
 import { normalizeBlanks } from './grid.ts';
+
+/** Wall-clock budget for generating n puzzles in one container. */
+export function genTimeoutMs(n: number): number {
+  return Math.max(GEN_TIMEOUT_FLOOR_MS, n * GEN_TIMEOUT_PER_PUZZLE_MS);
+}
+
+/** Wall-clock guard for solving n puzzles (early-resolve usually returns far sooner). */
+export function solveTimeoutMs(n: number): number {
+  return Math.max(SOLVE_TIMEOUT_MS, n * SOLVE_TIMEOUT_PER_PUZZLE_MS);
+}
 
 // Real qqwing --solve --count-solutions --one-line output format (characterised 2026-06-28):
 //   Unique puzzle:       "<81-digit solution>\nThe solution to the puzzle is unique.\n"
@@ -30,7 +44,7 @@ export type SolveResult = { puzzle: string; solution: string | null; solutionCou
  * the optional `expectedResultLines` parameter resolves the promise as soon as that many "result
  * lines" have been seen in stdout, then kills the container — avoiding the wait for container exit.
  */
-function dockerRun(args: string[], stdin?: string, expectedResultLines?: number): Promise<string> {
+function dockerRun(args: string[], timeoutMs: number, stdin?: string, expectedResultLines?: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('docker', args, { stdio: ['pipe', 'pipe', 'inherit'] });
     let out = '';
@@ -47,7 +61,7 @@ function dockerRun(args: string[], stdin?: string, expectedResultLines?: number)
 
     const timer = setTimeout(
       () => done(new Error('qqwing docker timeout')),
-      SOLVE_TIMEOUT_MS,
+      timeoutMs,
     );
 
     proc.stdout.on('data', (d: Buffer) => {
@@ -89,7 +103,7 @@ export async function generate(tier: Tier, n: number): Promise<string[]> {
   const raw = await dockerRun([
     'run', '--rm', '--network', 'none', QQWING_IMAGE,
     'qqwing', '--generate', String(n), '--difficulty', diff, '--symmetry', 'rotate180', '--one-line',
-  ]);
+  ], genTimeoutMs(n));
   return raw.split('\n').map((l) => l.trim()).filter((l) => PUZZLE_LINE.test(l)).map(normalizeBlanks);
 }
 
@@ -163,6 +177,6 @@ export async function solveAndCount(puzzles: string[]): Promise<SolveResult[]> {
   const raw = await dockerRun([
     'run', '--rm', '-i', '--network', 'none', QQWING_IMAGE,
     'qqwing', '--solve', '--count-solutions', '--one-line',
-  ], puzzles.join('\n') + '\n', puzzles.length);
+  ], solveTimeoutMs(puzzles.length), puzzles.join('\n') + '\n', puzzles.length);
   return parseSolveOutput(raw, puzzles);
 }

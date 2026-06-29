@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseSolveOutput } from '../src/qqwing.ts';
+import { parseSolveOutput, genTimeoutMs, solveTimeoutMs } from '../src/qqwing.ts';
 
 // Ground truth: real captured qqwing output (tests/fixtures/qqwing-solve.txt)
 // qqwing --solve --count-solutions --one-line format:
@@ -64,4 +64,24 @@ test('parseSolveOutput handles mixed unique + impossible batch', () => {
   assert.equal(results[0].solution?.length, 81);
   assert.equal(results[1].solutionCount, 0);
   assert.equal(results[1].solution, null);
+});
+
+// ---------------------------------------------------------------------------
+// Timeout helper pure-function tests (no Docker)
+// ---------------------------------------------------------------------------
+
+test('genTimeoutMs: floor honored for small n', () => {
+  assert.equal(genTimeoutMs(1), 60_000);
+});
+
+test('genTimeoutMs: scales for large n', () => {
+  assert.equal(genTimeoutMs(200), 400_000);
+});
+
+test('solveTimeoutMs: floor honored for small n', () => {
+  assert.equal(solveTimeoutMs(1), 30_000);
+});
+
+test('solveTimeoutMs: scales for large n', () => {
+  assert.equal(solveTimeoutMs(200), 200_000);
 });

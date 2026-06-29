@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-06-29 — Plan 2 COMPLETE: hard tier via sandboxed HoDoKu + serate; full 10,000-puzzle dataset produced
+**What:** Finished the hard tier and produced the complete **`sudoku_10000.json`** — **10,000 validated records**: very_easy 2,000 · easy 3,000 · medium 3,000 · **hard 2,000**. Built in ~17 min on a 2-CPU/2GB Colima VM. Validation: **0 malformed grids, 0 duplicate puzzles** across the whole dataset, hard ER range **3.4–4.6** (all in the 3.4–5.0 band), hard `fun_score` all null, and **0 leaked containers** (DP-2 holds end-to-end).
+
+**Hard-tier pipeline:** HoDoKu generates technique-targeted candidates (`/s /sc bf2,bf3,xy`), serate (Sudoku Explainer) rates each by ER, the trusted qqwing container is the independent uniqueness gate over that untrusted output, then ER-band + clue-floor + dedup gates apply. Difficulty comes from the serate ER number (the Rust grader can't solve these). Records set `er_rating` + `fun_score:null`. Over-generates ~3× (only ~30% of candidates land in-band) with resumable per-tier checkpoints; `node dataset-pipeline/bin/run-all.ts` assembles all four tiers.
+
+**DP-2 carried into Plan 2 (the machine/CPU container-leak fix):** the untrusted HoDoKu/serate runs reuse the same named-container + `docker stop -t 0` force-reap pattern as Plan 1's qqwing, extracted into a shared `dataset-pipeline/src/docker.ts`. No `--rm`+SIGKILL leak path. Verified leak-free across every smoke and the full run.
+
+**Owner decision (logged in DECISIONS):** the 180° symmetry gate was DROPPED for the hard tier — HoDoKu yields 0/200 symmetric puzzles, so enforcing it would make the tier impossible. Lower tiers stay rotate180-symmetric; hard is intentionally asymmetric.
+
+**Final whole-branch review (opus) → "with fixes":** found the hard loop lacked the lower tiers' fault-tolerance. Fixed (commit 493496c): `buildHardTier` now has the same try/catch + `MAX_CONSECUTIVE_BATCH_FAILURES` retry + wrapper-length guard as `buildTier`, and serate's timeout scales per-puzzle (`SERATE_TIMEOUT_PER_PUZZLE_MS`). Full TS suite 71/71 green.
+
+**Files touched:** `dataset-pipeline/src/{docker,hodoku,serate,hard-pipeline,config,record,assemble}.ts`, `dataset-pipeline/bin/run-all.ts`, `dataset-pipeline/sandbox/{jars.Dockerfile,jars.lock,build-jars.sh}`, tests for each. Commits b8f8019 → 493496c on `feat/dataset-pipeline-plan2`.
+
 ## 2026-06-29 — Plan 2 Task 1: `sudoku-jars` sandbox image (HoDoKu + serate, in-build + hash/commit-verified)
 **What:** Built the untrusted-tool Docker image `sudoku-jars` for the hard-tier pipeline. Two tools acquired and integrity-verified entirely inside Docker (nothing on the host): **HoDoKu 2.2.0** (downloaded, SHA-256-verified) and **serate / SukakuExplainer** (cloned at a pinned commit, built from source). Final image carries only `/opt/hodoku.jar` + `/opt/serate.jar` + a JRE; runs with `docker run --network none`.
 

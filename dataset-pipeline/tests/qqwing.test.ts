@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseSolveOutput, genTimeoutMs, solveTimeoutMs } from '../src/qqwing.ts';
+import { parseSolveOutput, genTimeoutMs, solveTimeoutMs, withContainerName } from '../src/qqwing.ts';
 
 // Ground truth: real captured qqwing output (tests/fixtures/qqwing-solve.txt)
 // qqwing --solve --count-solutions --one-line format:
@@ -84,4 +84,19 @@ test('solveTimeoutMs: floor honored for small n', () => {
 
 test('solveTimeoutMs: scales for large n', () => {
   assert.equal(solveTimeoutMs(200), 200_000);
+});
+
+// ---------------------------------------------------------------------------
+// withContainerName: pure helper — no Docker
+// ---------------------------------------------------------------------------
+
+test('withContainerName inserts --name after "run" in normal docker args', () => {
+  const args = ['run', '--rm', '--network', 'none', 'qqwing-trusted', 'qqwing', '--solve'];
+  const result = withContainerName(args, 'qqwing-abc');
+  assert.deepEqual(result, ['run', '--name', 'qqwing-abc', '--rm', '--network', 'none', 'qqwing-trusted', 'qqwing', '--solve']);
+});
+
+test('withContainerName prepends --name when no "run" element present', () => {
+  const result = withContainerName(['qqwing'], 'n');
+  assert.deepEqual(result, ['--name', 'n', 'qqwing']);
 });

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import {
   QQWING_IMAGE, QQWING_DIFFICULTY, WORK_DIR,
@@ -38,6 +39,17 @@ const RESULT_LINE = /^(The solution to the puzzle is unique\.|There are \d+ solu
 export type SolveResult = { puzzle: string; solution: string | null; solutionCount: number };
 
 /**
+ * Splice `--name <name>` immediately after the first 'run' element in a docker args array.
+ * If no 'run' element is found, prepends '--name <name>' to the array (fallback).
+ * Exported for unit testing.
+ */
+export function withContainerName(args: string[], name: string): string[] {
+  const i = args.indexOf('run');
+  if (i === -1) return ['--name', name, ...args];
+  return [...args.slice(0, i + 1), '--name', name, ...args.slice(i + 1)];
+}
+
+/**
  * Run a docker container, optionally piping stdin.
  * On macOS Docker Desktop, the container's close event can be delayed by 30-120 seconds after
  * stdout is fully received. To avoid the SOLVE_TIMEOUT_MS being triggered by this slow shutdown,
@@ -46,15 +58,22 @@ export type SolveResult = { puzzle: string; solution: string | null; solutionCou
  */
 function dockerRun(args: string[], timeoutMs: number, stdin?: string, expectedResultLines?: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('docker', args, { stdio: ['pipe', 'pipe', 'inherit'] });
+    const containerName = 'qqwing-' + randomUUID();
+    const namedArgs = withContainerName(args, containerName);
+    const proc = spawn('docker', namedArgs, { stdio: ['pipe', 'pipe', 'inherit'] });
     let out = '';
     let settled = false;
     let resultLineCount = 0;
+
+    function teardown() {
+      try { spawn('docker', ['stop', '-t', '0', containerName], { stdio: 'ignore' }).unref(); } catch { /* ignore */ }
+    }
 
     function done(err?: Error) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      teardown();
       if (err) { proc.kill('SIGKILL'); reject(err); }
       else resolve(out);
     }

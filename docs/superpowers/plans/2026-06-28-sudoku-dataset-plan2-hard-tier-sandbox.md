@@ -13,9 +13,10 @@
 - **Spec:** `docs/superpowers/specs/2026-06-28-sudoku-10k-dataset-design.md` — authoritative.
 - **Depends on Plan 1.** This plan consumes Plan 1's modules: `dataset-pipeline/src/{config,qqwing,grader,record,dedupe,checkpoint,assemble,grid}.ts`. **Do not start execution until Plan 1 is merged into the working tree.** (Writing this plan does not require Plan 1's code; executing it does.)
 - **HARD SECURITY RULE — straight to the sandbox.** The untrusted HoDoKu/SE JARs **never touch the host**: not downloaded, stored, verified, or run on the host. The host only issues `docker build` / `docker run`. All acquisition, hash verification, CLI discovery, and execution happen *inside Docker*. There is no `sandbox/jars/` directory on the host and no host-side web research on these tools.
-- **In-container fetch + verify.** `sandbox/jars.Dockerfile` is multi-stage: a fetch stage downloads each JAR (network only at build) and runs `sha256sum -c` against hashes pinned in `dataset-pipeline/sandbox/jars.lock`; the runtime stage copies only verified JARs. Wrong hash → build fails.
+- **In-container acquisition + verify.** `sandbox/jars.Dockerfile` is multi-stage (network only at build). **HoDoKu**: download the JAR and `sha256sum -c` against the hash pinned in `dataset-pipeline/sandbox/jars.lock` (wrong hash → build fails). **serate (SE)**: **built from source** — `git clone` the pinned repo, `git checkout` the pinned **commit SHA** (the immutable integrity pin), `mvn package`. The runtime stage copies only the verified HoDoKu JAR + the freshly built serate JAR.
 - **Offline runtime.** Every HoDoKu/serate/qqwing run uses `docker run --network none`. Only the checkpoint dir is bind-mounted (read-write) for text I/O.
 - **Hard tier target:** 2,000 puzzles. **ER band:** keep `3.4 ≤ ER ≤ 5.0` only.
+- **180° symmetry is enforced for hard** (owner decision). Every hard survivor must pass `isSymmetric180`. If HoDoKu's batch mode can generate symmetric directly, use that; if not, the symmetry gate post-filters (accept the lower yield — do not relax the gate).
 - **The Rust grader is NOT used for the hard tier.** The `sudoku` crate's `StrategySolver` lacks wings/chains and cannot solve many ER 3.4–5.0 puzzles; using it would wrongly reject them. Hard-tier difficulty comes from the ER number; uniqueness from qqwing `count-solutions`; techniques from HoDoKu/serate output.
 - **Record schema:** hard records set `er_rating` (number) and `fun_score: null`.
 - **Characterization, not guessing.** HoDoKu and serate CLI flags + output formats are discovered by running `--help`/sample runs *inside the container*, captured to fixtures, and wrappers are written against the captured output (same pattern as Plan 1 Task 5). No flags are hardcoded from memory.
@@ -29,66 +30,74 @@ Builds the untrusted-tool image. The fetch stage downloads the JARs and verifies
 
 **Files:**
 - Create: `dataset-pipeline/sandbox/jars.Dockerfile`
-- Create: `dataset-pipeline/sandbox/jars.lock` (pinned URLs + SHA-256)
+- Create: `dataset-pipeline/sandbox/jars.lock` (HoDoKu URL+SHA-256; serate repo+commit)
 - Create: `dataset-pipeline/sandbox/build-jars.sh`
 
 **Interfaces:**
 - Produces (consumed by Tasks 2–4): a Docker image tagged `sudoku-jars` containing `/opt/hodoku.jar` and `/opt/serate.jar` (paths confirmed in Step 4), runnable with `docker run --network none sudoku-jars ...`.
 
-- [ ] **Step 1: Pin sources + hashes (in a throwaway networked container)**
+- [ ] **Step 1: Pin sources (in a throwaway networked container)**
 
-The official sources (canonical, widely referenced):
-- HoDoKu: `hodoku.sourceforge.net` (the project's release JAR).
-- Sudoku Explainer / serate: the maintained **SukakuExplainer** fork on GitHub publishes a release JAR with a `serate` batch mode; the original Sudoku Explainer by Nicolas Juillerat is the upstream. (Exact release asset URL is confirmed in this step.)
+The sources:
+- **HoDoKu** — `hodoku.sourceforge.net` (the project's release JAR). Pinned by URL + SHA-256.
+- **serate (SE)** — built from source. The maintained **SukakuExplainer** fork on GitHub (`github.com/SudokuMonster/SukakuExplainer`, a Maven project) exposes the `diuf.sudoku.test.serate` batch-rating mode. Pinned by **repo URL + commit SHA** (the commit is the immutable integrity pin; building avoids trusting an opaque binary).
 
-Discover the resolvable download URL and record its hash **inside a container**, never on the host:
+Discover the resolvable HoDoKu URL + its hash and the serate repo's current commit **inside a container**, never on the host:
 
 ```bash
 docker run --rm --network bridge debian:bookworm-slim bash -c '
   set -e
-  apt-get update >/dev/null && apt-get install -y --no-install-recommends curl ca-certificates >/dev/null
-  echo "=== resolving HoDoKu ==="; curl -fsSLI <HODOKU_URL_CANDIDATE> | head -20 || true
+  apt-get update >/dev/null && apt-get install -y --no-install-recommends curl ca-certificates git >/dev/null
+  echo "=== HoDoKu ==="; curl -fsSLI <HODOKU_URL_CANDIDATE> | head -20 || true
   curl -fsSL -o /tmp/hodoku.jar <HODOKU_URL_CANDIDATE> && sha256sum /tmp/hodoku.jar
-  echo "=== resolving serate/SE ==="; curl -fsSL -o /tmp/serate.jar <SERATE_URL_CANDIDATE> && sha256sum /tmp/serate.jar
+  echo "=== serate repo HEAD commit ==="; git ls-remote https://github.com/SudokuMonster/SukakuExplainer.git HEAD
 '
 ```
 
-Record the working URLs and the printed SHA-256 sums into `dataset-pipeline/sandbox/jars.lock`:
+Record into `dataset-pipeline/sandbox/jars.lock`:
 
 ```
-# jars.lock — pinned untrusted-tool artifacts (verified in-container, never on host)
+# jars.lock — pinned untrusted-tool artifacts (acquired + verified in-container, never on host)
+# HoDoKu: downloaded JAR, integrity = SHA-256
 HODOKU_URL=<resolved url>
 HODOKU_SHA256=<sha256>
-SERATE_URL=<resolved url>
-SERATE_SHA256=<sha256>
+# serate: built from source, integrity = pinned commit SHA
+SERATE_REPO=https://github.com/SudokuMonster/SukakuExplainer.git
+SERATE_COMMIT=<full 40-char commit sha from git ls-remote>
 ```
-
-> If serate is only available as source (no release JAR), record the GitHub repo + commit SHA instead, and Step 2's fetch stage builds it with Maven inside the container. Decide based on what this step finds; note the choice in `jars.lock` as a comment.
 
 - [ ] **Step 2: Write the multi-stage Dockerfile**
 
-Create `dataset-pipeline/sandbox/jars.Dockerfile` (uses build ARGs fed from `jars.lock`; the `sha256sum -c` lines fail the build on mismatch):
+Create `dataset-pipeline/sandbox/jars.Dockerfile`. HoDoKu is downloaded + `sha256sum -c`-verified; serate is cloned at the pinned commit and built with Maven — all in network-enabled build stages. The runtime stage has no network and only the artifacts.
 
 ```dockerfile
-# ---- fetch stage: network only here; verify in-build ----
-FROM debian:bookworm-slim AS fetch
+# ---- hodoku fetch stage: download + verify hash ----
+FROM debian:bookworm-slim AS hodoku
 ARG HODOKU_URL
 ARG HODOKU_SHA256
-ARG SERATE_URL
-ARG SERATE_SHA256
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
 RUN curl -fsSL -o hodoku.jar "$HODOKU_URL" \
  && echo "${HODOKU_SHA256}  hodoku.jar" | sha256sum -c -
-RUN curl -fsSL -o serate.jar "$SERATE_URL" \
- && echo "${SERATE_SHA256}  serate.jar" | sha256sum -c -
 
-# ---- runtime stage: JRE + verified JARs only, no network at run ----
+# ---- serate build stage: clone pinned commit + maven package ----
+FROM maven:3-eclipse-temurin-17 AS serate
+ARG SERATE_REPO
+ARG SERATE_COMMIT
+WORKDIR /src
+RUN git clone "$SERATE_REPO" . \
+ && git checkout "$SERATE_COMMIT" \
+ && git rev-parse HEAD | grep -q "^${SERATE_COMMIT}" \
+ && mvn -q -DskipTests package
+# Copy the built jar to a stable name (confirm the produced artifact name from target/ — adjust glob if needed).
+RUN cp "$(ls target/*.jar | grep -v -E 'original|sources|javadoc' | head -1)" /serate.jar
+
+# ---- runtime stage: JRE + artifacts only, no network at run ----
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt
-COPY --from=fetch /opt/hodoku.jar /opt/hodoku.jar
-COPY --from=fetch /opt/serate.jar /opt/serate.jar
+COPY --from=hodoku /opt/hodoku.jar /opt/hodoku.jar
+COPY --from=serate /serate.jar /opt/serate.jar
 ENTRYPOINT []
 ```
 
@@ -102,19 +111,19 @@ cd "$(dirname "$0")"
 source ./jars.lock
 docker build -f jars.Dockerfile \
   --build-arg HODOKU_URL="$HODOKU_URL" --build-arg HODOKU_SHA256="$HODOKU_SHA256" \
-  --build-arg SERATE_URL="$SERATE_URL" --build-arg SERATE_SHA256="$SERATE_SHA256" \
+  --build-arg SERATE_REPO="$SERATE_REPO" --build-arg SERATE_COMMIT="$SERATE_COMMIT" \
   -t sudoku-jars .
 echo "built sudoku-jars; contents:"
 docker run --rm --network none sudoku-jars ls -la /opt
 ```
 
-- [ ] **Step 3: Build the image (verifies hashes)**
+- [ ] **Step 3: Build the image (verifies hash + pinned commit)**
 
 ```bash
 chmod +x dataset-pipeline/sandbox/build-jars.sh
 ./dataset-pipeline/sandbox/build-jars.sh
 ```
-Expected: build succeeds; both `sha256sum -c` lines print `hodoku.jar: OK` / `serate.jar: OK`; final `ls -la /opt` lists both JARs. A hash mismatch must fail the build (that is the security gate working).
+Expected: build succeeds; the HoDoKu `sha256sum -c` prints `hodoku.jar: OK`; the serate stage checks out the pinned commit (the `git rev-parse | grep` line fails the build if the commit drifts) and Maven produces a jar; final `ls -la /opt` lists `hodoku.jar` + `serate.jar`. A hash mismatch or commit drift must fail the build (that is the security gate working). If the Maven artifact name differs, adjust the `cp "$(ls target/*.jar ...)"` glob to the real built jar.
 
 - [ ] **Step 4: Confirm Java can load each JAR offline**
 
@@ -160,7 +169,7 @@ docker run --rm --network none sudoku-jars java -jar /opt/hodoku.jar <BATCH_GEN_
 ```
 Determine and note in a comment at the top of the fixture file: the output shape (one 81-char puzzle per line? dots or zeros for blanks? a trailing rating/technique column?), and the exact flag that forces a target technique (e.g. an X-Wing). If HoDoKu cannot force a technique in batch mode, note that — Task 4 then relies on the serate ER band alone to define "hard" and HoDoKu just generates difficult puzzles.
 
-> **Symmetry check:** also determine whether HoDoKu can generate with 180° symmetry. If it can, enable it. If it cannot, that is a real finding — flag it for an owner decision (relax the symmetry gate for the hard tier, or post-filter and accept lower yield). Do not silently drop the symmetry requirement.
+> **Symmetry (decided — enforced):** 180° symmetry is required for hard. Check whether HoDoKu can generate symmetric directly. If it can, enable that flag (better yield). If it cannot, do nothing here — the `isSymmetric180` gate in Task 4's `acceptHard` post-filters and we accept the lower yield (the checkpoint makes the longer run fine). Never relax the symmetry gate.
 
 - [ ] **Step 2: Write the failing test (parser against captured fixture)**
 
@@ -704,6 +713,10 @@ git commit -m "docs: Plan 2 complete — full 10k dataset; tool quirks recorded"
 
 **Cross-plan dependency:** Every Plan 1 import (`config`, `qqwing.solveAndCount`, `grid`, `record`, `checkpoint`, `dedupe`, `assemble.buildTier/sortRecords`) is listed; execution is gated on Plan 1 being merged. ✓
 
-**Open risks carried (decided by characterization, surfaced to owner):**
-- HoDoKu batch CLI may not support forced-technique and/or 180° symmetry — Task 2 surfaces this for an owner decision rather than silently relaxing the symmetry gate.
-- serate may be source-only (build with Maven in the fetch stage) — Task 1 Step 1 handles via repo+commit pin.
+**Owner decisions locked (2026-06-29):**
+- **180° symmetry enforced for hard.** If HoDoKu can't generate symmetric natively, the `isSymmetric180` gate post-filters and we accept lower yield; the gate is never relaxed.
+- **serate built from source in-container.** Pinned by repo + commit SHA, Maven build in a dedicated build stage (Task 1). No release-JAR download for serate.
+
+**Remaining characterization (mechanical, no owner decision needed):**
+- Exact HoDoKu batch/forced-technique flags and output format → Task 2 (in-container `--help`).
+- Exact serate class/flags/output token + the Maven artifact name → Tasks 1 & 3 (in-container).

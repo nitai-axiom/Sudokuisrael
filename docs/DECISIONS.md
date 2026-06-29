@@ -49,3 +49,9 @@
 **Context:** `engine.getHint()` returns the smartest next step, but "eliminate" hints describe note removals the engine can't apply yet (ENG-4 is open).
 **Decision:** For v1, the hint button asks the engine which cell to act on, then reveals that cell's correct value (undoable, counts as a hint). Simple and always useful.
 **Impact:** Hint always advances the board. Richer technique-explaining hints wait on ENG-4 (the hint/notes design).
+
+## 2026-06-29 — Plan 2: drop 180° symmetry gate for the HARD tier (reverses earlier locked decision)
+**Context:** The 2026-06-29 locked decision said "180° symmetry enforced for hard; if HoDoKu can't generate symmetric, the gate post-filters and we accept the lower yield." Task 2 then confirmed HoDoKu cannot generate symmetric puzzles (bytecode: `generateSudoku(false)` hardcoded). An empirical run measured **0/200 (0.0%)** HoDoKu puzzles as 180°-symmetric — so the gate would reject 100% of candidates and the hard tier could never be built (buildHardTier would hit its 100k-round guard and throw).
+**Options:** (A) Drop the symmetry gate for hard only — build from HoDoKu + serate ER 3.4–5.0; (B) Keep symmetry but switch hard generation to qqwing's hardest symmetric puzzles filtered to the ER band (unknown/likely-low yield, abandons HoDoKu technique-targeting); (C) Keep gate, accept ~0 hard puzzles (no hard tier).
+**Decision:** A — owner chose to drop `isSymmetric180` from `acceptHard` for the hard tier. Lower tiers stay rotate180-symmetric (qqwing); hard is asymmetric.
+**Impact:** Hard tier is now buildable. Difficulty still comes from the serate ER band, uniqueness from qqwing `count-solutions`, clue-floor still enforced. Aesthetic only: hard puzzles lack the mirror symmetry of the easier tiers. The "never relax the gate" instruction is explicitly superseded by this owner decision for the hard tier.

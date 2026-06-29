@@ -43,6 +43,9 @@ export const MIN_CLUES_SYMMETRIC = 18;
 export const BATCH_SIZE = 200;        // puzzles per qqwing container invocation
 export const SOLVE_TIMEOUT_MS = 30_000; // per-batch qqwing solve timeout guard (also the solve floor)
 
+// serate observed ~155ms/puzzle on hard ER 3.4-5.0 (2-CPU Colima); 1s = ~6x headroom
+export const SERATE_TIMEOUT_PER_PUZZLE_MS = 1_000;
+
 // Per-puzzle docker time budgets (qqwing rejection-samples difficulty; generation dominates).
 export const GEN_TIMEOUT_PER_PUZZLE_MS = 2_000;   // generous vs observed ~0.5s/puzzle for 'simple'
 export const GEN_TIMEOUT_FLOOR_MS = 60_000;       // minimum, covers container cold start + small batches

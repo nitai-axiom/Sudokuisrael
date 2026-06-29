@@ -1,5 +1,11 @@
 # DECISIONS
 
+## 2026-06-29 — serate built with `javac`, not Maven (Plan 2 Task 1)
+**Context:** The hard-tier sandbox image must build serate FROM SOURCE at a pinned commit (security rule: no opaque binary). The plan/brief assumed SukakuExplainer is a Maven project and used `mvn package`. At the pinned commit `362854e` the repo has NO `pom.xml` and NO `build.xml` — it's an Eclipse project (raw `.java` under `diuf/`, plus `.classpath`/`.project`). `mvn package` fails ("no POM").
+**Options considered:** (A) compile from source directly with the JDK 17 already in the base image (`javac` + `jar`); (B) download a prebuilt release JAR and pin its SHA-256 like HoDoKu.
+**Decision:** A. Option B was rejected — it violates the non-negotiable "build from source, don't trust an opaque binary" rule. Option A honors that rule; the commit-SHA integrity pin and commit-drift build gate are unchanged. It's also lighter on the 2 GB Colima box (no Maven dependency resolution; no OOM).
+**Impact:** Build-mechanism change only; security posture identical. serate's runnable artifact is a hand-built `serate.jar` with Main-Class `diuf.sudoku.test.serate` (run via `-cp /opt/serate.jar diuf.sudoku.test.serate`). Tasks 2–3 wrappers use the entrypoints/usage captured in `.superpowers/sdd/task-1-report.md`.
+
 ## 2026-06-28 — Phase 1 scope: cleanup before code surgery
 **Context:** Full audit found duplication, no docs, no build, a secret-leak risk, and engine bugs.
 **Options considered:** (A) Phase 1 cleanup only; (B) cleanup + engine fixes; (C) everything incl. UI rewire.

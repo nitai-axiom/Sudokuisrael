@@ -18,7 +18,8 @@ There is now ONE game: a Next.js app in `web/` that plays through the tested eng
 | OCR scanner (`lib/scanner/`) | 🟥 WIP ~30% | Parked. |
 
 ## In progress
-- Nothing actively in progress. Phase 3 v1 complete; Dataset pipeline Plan 1 complete; full 8,000 dataset generated.
+- **Plan 2 (hard tier) — Task 1 DONE.** Built the untrusted-tool image `sudoku-jars` (HoDoKu 2.2.0 + serate/SukakuExplainer), acquired + hash/commit-verified entirely in-Docker, runs offline (`--network none`). Both JARs load and run; both security gates verified (wrong hash / bad commit fail the build). serate entrypoint is `diuf.sudoku.test.serate` (run via `-cp`); built from source with javac — repo has no pom.xml at the pinned commit (see DECISIONS). Next: Task 2 (HoDoKu generation wrapper) + Task 3 (serate ER-rating wrapper) using the tool help/entrypoints captured in `.superpowers/sdd/task-1-report.md`.
+- Phase 3 v1 complete; Dataset pipeline Plan 1 complete; full 8,000 dataset generated.
 
 ## Machine/ops note (2026-06-29)
 - A qqwing **container leak** under Colima was pinning the CPU during long runs (34 orphaned containers, ~6% CPU each, unbounded) — now fixed (DP-2): containers are named and force-reaped on settle. If you ever see stray `qqwing-*` containers, clean them with `docker ps -aq --filter ancestor=qqwing-trusted | xargs docker stop -t 0`. Healthy runs hold at ~1 concurrent container.

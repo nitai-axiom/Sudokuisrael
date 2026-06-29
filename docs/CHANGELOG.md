@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-06-29 — Plan 2 Task 1: `sudoku-jars` sandbox image (HoDoKu + serate, in-build + hash/commit-verified)
+**What:** Built the untrusted-tool Docker image `sudoku-jars` for the hard-tier pipeline. Two tools acquired and integrity-verified entirely inside Docker (nothing on the host): **HoDoKu 2.2.0** (downloaded, SHA-256-verified) and **serate / SukakuExplainer** (cloned at a pinned commit, built from source). Final image carries only `/opt/hodoku.jar` + `/opt/serate.jar` + a JRE; runs with `docker run --network none`.
+
+**Pins (`dataset-pipeline/sandbox/jars.lock`):** HoDoKu URL `downloads.sourceforge.net/project/hodoku/hodoku/hodoku_2.2.0/hodoku.jar`, SHA-256 `6e5f0c86…2294bc`; serate repo `github.com/SudokuMonster/SukakuExplainer.git` @ commit `362854eea4e983017726d406ac9ee8a28909bcc7`.
+
+**Deviation (logged in DECISIONS):** SukakuExplainer is NOT a Maven project at the pinned commit (no pom.xml — it's an Eclipse project of raw .java sources). Built from source with `javac`+`jar` instead of `mvn package`; the commit-SHA integrity pin and "no opaque binary" rule are intact. serate entrypoint is `diuf.sudoku.test.serate` (run via `-cp`).
+
+**Verified:** image builds; HoDoKu hash gate prints `hodoku.jar: OK`; both security gates fail the build when tampered (wrong hash → exit 1, bad commit → exit 128); both JARs load & run offline (`--network none`) — HoDoKu solved a puzzle, serate rated `1.2/1.2/1.2`.
+
+**Files touched:** `dataset-pipeline/sandbox/jars.Dockerfile`, `dataset-pipeline/sandbox/jars.lock`, `dataset-pipeline/sandbox/build-jars.sh` (commit b8f8019). Captured tool help text → `.superpowers/sdd/task-1-report.md` (ground truth for Tasks 2–3).
+
 ## 2026-06-29 — First full 8,000-puzzle dataset + two production fixes (incl. CPU/container leak) + medium fun-score upgrade
 **What:** Ran the pipeline for the first full production build and produced `sudoku_lower.json` with **8,000 validated puzzles** (very_easy 2,000 · easy 3,000 · medium 3,000; all unique, 0 invalid). Two real failures surfaced during the run and were fixed test-driven + reviewed, then the medium tier's difficulty mix was upgraded.
 

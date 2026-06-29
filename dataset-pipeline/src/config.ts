@@ -1,16 +1,22 @@
 import path from 'node:path';
 
-export const TIERS = ['very_easy', 'easy', 'medium'] as const;
+export const TIERS = ['very_easy', 'easy', 'medium', 'hard'] as const;
 export type Tier = typeof TIERS[number];
 
-// Full-dataset targets (hard added in Plan 2). This plan produces the lower three.
+/** Lower tiers: generated via qqwing + Rust grader. Hard uses HoDoKu + serate instead. */
+export const LOWER_TIERS = ['very_easy', 'easy', 'medium'] as const;
+export type LowerTier = typeof LOWER_TIERS[number];
+
+// Full-dataset targets (hard added in Plan 2). Lower three produced by Plan 1 pipeline.
 export const TARGETS: Record<Tier, number> = {
   very_easy: 2000,
   easy: 3000,
   medium: 3000,
+  hard: 2000,
 };
 
-export const QQWING_DIFFICULTY: Record<Tier, 'simple' | 'easy' | 'intermediate'> = {
+// Hard is not qqwing-generated — QQWING_DIFFICULTY and EXPECTED_GRADE only cover lower tiers.
+export const QQWING_DIFFICULTY: Record<LowerTier, 'simple' | 'easy' | 'intermediate'> = {
   very_easy: 'simple',
   easy: 'easy',
   medium: 'intermediate',
@@ -20,11 +26,16 @@ export const QQWING_DIFFICULTY: Record<Tier, 'simple' | 'easy' | 'intermediate'>
 // very_easy and easy are both singles-only ('easy' to the grader); they are split by
 // the qqwing difficulty used to generate them. medium must genuinely require
 // locked candidates / subsets ('medium').
-export const EXPECTED_GRADE: Record<Tier, 'easy' | 'medium'> = {
+// Hard is not Rust-graded — no entry here.
+export const EXPECTED_GRADE: Record<LowerTier, 'easy' | 'medium'> = {
   very_easy: 'easy',
   easy: 'easy',
   medium: 'medium',
 };
+
+// ER (Estimation Rating) band for hard-tier puzzles (serate-scored).
+export const ER_MIN = 3.4;
+export const ER_MAX = 5.0;
 
 export const MIN_CLUES = 17;
 export const MIN_CLUES_SYMMETRIC = 18;

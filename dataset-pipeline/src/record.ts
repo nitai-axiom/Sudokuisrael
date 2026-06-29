@@ -1,5 +1,4 @@
 import type { Tier } from './config.ts';
-import type { Grade } from './grader.ts';
 import { clueCount, normalizeBlanks } from './grid.ts';
 
 export type PuzzleRecord = {
@@ -14,7 +13,8 @@ export type PuzzleRecord = {
 };
 
 export function buildRecord(args: {
-  puzzle: string; solution: string; tier: Tier; grade: Grade; funScore: number | null; now: string;
+  puzzle: string; solution: string; tier: Tier; grade: { techniques: string[] };
+  funScore: number | null; erRating?: number | null; now: string;
 }): PuzzleRecord {
   const puzzle = normalizeBlanks(args.puzzle);
   const solution = normalizeBlanks(args.solution);
@@ -24,7 +24,7 @@ export function buildRecord(args: {
     difficulty: args.tier,
     techniques: args.grade.techniques,
     givens: clueCount(puzzle),
-    er_rating: null,            // lower tiers carry no ER rating (Plan 2 sets it for hard)
+    er_rating: args.erRating ?? null,
     fun_score: args.funScore,
     generated_at: args.now,
   };

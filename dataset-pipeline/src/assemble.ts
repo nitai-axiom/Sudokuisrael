@@ -1,9 +1,9 @@
 import fs from 'node:fs';
-import { TIERS, OUTPUT_LOWER, type Tier } from './config.ts';
+import { LOWER_TIERS, OUTPUT_LOWER, type Tier } from './config.ts';
 import { buildTier } from './pipeline.ts';
 import type { PuzzleRecord } from './record.ts';
 
-const TIER_ORDER: Record<Tier, number> = { very_easy: 0, easy: 1, medium: 2 };
+const TIER_ORDER: Record<Tier, number> = { very_easy: 0, easy: 1, medium: 2, hard: 3 };
 
 export function sortRecords(rows: PuzzleRecord[]): PuzzleRecord[] {
   return [...rows].sort((a, b) => {
@@ -15,7 +15,7 @@ export function sortRecords(rows: PuzzleRecord[]): PuzzleRecord[] {
 
 export async function assembleLower(opts?: { target?: number; now?: () => string }): Promise<PuzzleRecord[]> {
   const all: PuzzleRecord[] = [];
-  for (const tier of TIERS) {
+  for (const tier of LOWER_TIERS) {
     const rows = await buildTier(tier, { target: opts?.target, now: opts?.now });
     all.push(...rows);
   }

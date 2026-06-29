@@ -1,15 +1,15 @@
 # STATUS
 
-**Last updated:** 2026-06-28
-**Phase:** Phase 3 (v1) done. Dataset pipeline Plan 1 complete — lower-tier dataset generation ready.
+**Last updated:** 2026-06-29
+**Phase:** Phase 3 (v1) done. Dataset pipeline Plan 1 complete — **first full 8,000-puzzle lower-tier dataset produced and validated.**
 
 ## One-line state
-There is now ONE game: a Next.js app in `web/` that plays through the tested engine. The duplicate logic in `index.html` is superseded (kept only as a visual reference until parity is signed off). The dataset pipeline can now generate 8,000 lower-tier puzzles (very_easy, easy, medium) with resumable checkpoints.
+There is now ONE game: a Next.js app in `web/` that plays through the tested engine. The duplicate logic in `index.html` is superseded (kept only as a visual reference until parity is signed off). The dataset pipeline has produced a full **8,000-puzzle** lower-tier dataset (`sudoku_lower.json`: very_easy 2,000 · easy 3,000 · medium 3,000; all unique + validated), with the medium tier fun-score-upgraded.
 
 ## What's working
 | Component | State | Notes |
 |---|---|---|
-| Dataset pipeline (`dataset-pipeline/`) | ✅ Plan 1 ready | Generates lower-tier puzzles (very_easy/easy/medium). Two-zone architecture (trusted qqwing + Rust grader). Resumable checkpoints. 37 tests all green. Output → `sudoku_lower.json`. |
+| Dataset pipeline (`dataset-pipeline/`) | ✅ Plan 1 done; 8,000 produced | Generated the full lower-tier dataset. Two-zone architecture (trusted qqwing + Rust grader). Resumable checkpoints. Batch-scaled timeouts + fault-tolerant retry. Container leak fixed (named + force-reaped — no more CPU pinning under Colima). Medium fun-score upgraded (mean 3.62). 48 tests all green. Output → `sudoku_lower.json`. |
 | Next.js app (`web/`) | ✅ v1 playable | Real engine, RTL/Hebrew, mobile + desktop. Difficulty loads real puzzles. Verified by browser smoke test. |
 | Game engine (`lib/sudoku-engine.ts`) | ✅ Works, tested | Now the single source of game logic. 5 tests (`npm test`). ENG-4 (hint/notes) still open. |
 | Rust puzzle generator (`sudoku-generator/`) | ✅ Works, extended | Base generates graded puzzles; new `--grade` mode added for dataset pipeline. |
@@ -18,7 +18,10 @@ There is now ONE game: a Next.js app in `web/` that plays through the tested eng
 | OCR scanner (`lib/scanner/`) | 🟥 WIP ~30% | Parked. |
 
 ## In progress
-- Nothing actively in progress. Phase 3 v1 complete; Dataset pipeline Plan 1 complete.
+- Nothing actively in progress. Phase 3 v1 complete; Dataset pipeline Plan 1 complete; full 8,000 dataset generated.
+
+## Machine/ops note (2026-06-29)
+- A qqwing **container leak** under Colima was pinning the CPU during long runs (34 orphaned containers, ~6% CPU each, unbounded) — now fixed (DP-2): containers are named and force-reaped on settle. If you ever see stray `qqwing-*` containers, clean them with `docker ps -aq --filter ancestor=qqwing-trusted | xargs docker stop -t 0`. Healthy runs hold at ~1 concurrent container.
 
 ## Blocked / decisions needed
 - **Delete `index.html`?** v1 has reached parity. Awaiting owner OK to delete it (recoverable from git). This is the final step that makes "one implementation" literal.

@@ -2,6 +2,8 @@ import type { Tier } from './config.ts';
 import { clueCount, normalizeBlanks } from './grid.ts';
 
 export type PuzzleRecord = {
+  id: number;
+  source_id: number | null;
   puzzle: string;
   solution: string;
   difficulty: Tier;
@@ -14,11 +16,13 @@ export type PuzzleRecord = {
 
 export function buildRecord(args: {
   puzzle: string; solution: string; tier: Tier; grade: { techniques: string[] };
-  funScore: number | null; erRating?: number | null; now: string;
+  funScore: number | null; erRating?: number | null; now: string; sourceId?: number | null;
 }): PuzzleRecord {
   const puzzle = normalizeBlanks(args.puzzle);
   const solution = normalizeBlanks(args.solution);
   return {
+    id: 0,
+    source_id: args.sourceId ?? null,
     puzzle,
     solution,
     difficulty: args.tier,

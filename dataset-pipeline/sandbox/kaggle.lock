@@ -1,0 +1,6 @@
+# Trust-on-first-use pin of the Kaggle source CSV.
+# Dataset: radcliffe/3-million-sudoku-puzzles-with-ratings (CC0)
+# Fetched into the kaggle-csv Docker volume 2026-07-03 (Bearer / KGAT_ auth).
+# Columns: id,puzzle,solution,clues,difficulty | rows: 3000000 data + 1 header | size: 535888932 bytes
+# Verify: docker run --rm -v kaggle-csv:/data:ro sudoku-kaggle sha256sum /data/sudoku-3m.csv
+d5d4d65eba4303614d58a13033ab546ee218cc9fbbd0497147c97a42f22c15cd  sudoku-3m.csv

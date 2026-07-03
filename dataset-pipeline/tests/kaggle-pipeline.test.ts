@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { acceptKaggleLower, acceptKaggleHard } from '../src/kaggle-pipeline.ts';
+import fs from 'node:fs';
+import { acceptKaggleLower, acceptKaggleHard, buildKaggleTier, type Candidate } from '../src/kaggle-pipeline.ts';
+import { checkpointPath, cursorPath } from '../src/checkpoint.ts';
 import type { SolveResult } from '../src/qqwing.ts';
 import type { Grade } from '../src/grader.ts';
 
@@ -45,4 +47,27 @@ test('hard: rejects ER above the fair ceiling (obscure-technique zone)', () => {
 
 test('hard: rejects when grader says it needs guessing', () => {
   assert.equal(acceptKaggleHard({ solve: uniqueSolve, er: 3.2, grade: { solvable: false, difficulty: null, techniques: [] }, sourceId: 1, now: 'x' }), null);
+});
+
+const SOLc = Array.from({ length: 81 }, (_, i) => String((i % 9) + 1)).join('');
+function puz(n: number) { return String(n % 10).repeat(56) + SOLc.slice(56); } // 81 chars, distinct per n (0-9)
+function cleanMedium() { fs.rmSync(checkpointPath('medium'), { force: true }); fs.rmSync(cursorPath('medium'), { force: true }); }
+const fakeSolve = async (ps: string[]): Promise<SolveResult[]> => ps.map((p) => ({ puzzle: p, solution: SOLc, solutionCount: 1 }));
+const fakeGrade = async (ps: string[]): Promise<Grade[]> => ps.map(() => ({ solvable: true, difficulty: 'medium', techniques: ['naked_pair'] }));
+
+test('buildKaggleTier collects target survivors from finite candidates (medium, injected fakes)', async () => {
+  cleanMedium();
+  const cands: Candidate[] = Array.from({ length: 10 }, (_, i) => ({ sourceId: i, puzzle: puz(i) }));
+  const rows = await buildKaggleTier('medium', cands, { target: 3, now: () => 'x', solveAndCount: fakeSolve, gradeBatch: fakeGrade });
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((r) => r.difficulty === 'medium'));
+  cleanMedium();
+});
+
+test('buildKaggleTier stops when candidates run out (returns < target, no throw)', async () => {
+  cleanMedium();
+  const cands: Candidate[] = [{ sourceId: 0, puzzle: puz(0) }];
+  const rows = await buildKaggleTier('medium', cands, { target: 100, now: () => 'x', solveAndCount: fakeSolve, gradeBatch: fakeGrade });
+  assert.ok(rows.length <= 1);
+  cleanMedium();
 });

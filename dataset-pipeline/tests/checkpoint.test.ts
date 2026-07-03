@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { loadCheckpoint, appendCheckpoint, checkpointPath } from '../src/checkpoint.ts';
+import { loadCheckpoint, appendCheckpoint, checkpointPath, loadCursor, saveCursor, cursorPath } from '../src/checkpoint.ts';
 
 const rec = (puzzle: string) => ({
   puzzle, solution: '123456789'.repeat(9), difficulty: 'easy' as const,
@@ -24,4 +24,12 @@ test('loadCheckpoint returns [] when file missing', () => {
   const p = checkpointPath('medium');
   fs.rmSync(p, { force: true });
   assert.deepEqual(loadCheckpoint('medium'), []);
+});
+
+test('cursor defaults to 0 when absent, then round-trips', () => {
+  fs.rmSync(cursorPath('medium'), { force: true });
+  assert.equal(loadCursor('medium'), 0);   // absent → 0
+  saveCursor('medium', 512);
+  assert.equal(loadCursor('medium'), 512);  // round-trips
+  fs.rmSync(cursorPath('medium'), { force: true }); // reset so other tests are unaffected
 });

@@ -26,6 +26,9 @@ There is now ONE game: a Next.js app in `web/` that plays through the tested eng
 2. Switch the app from bundled `puzzles.json` to fetching puzzles from Supabase.
 3. Accounts / saved progress; then deploy (Vercel).
 
+## Regenerating `sudoku_150000.json` (2026-07-03)
+It's gitignored (68 MB). To rebuild from scratch: (1) `bash dataset-pipeline/sandbox/build-kaggle.sh`; (2) `export KAGGLE_API_TOKEN=$(cat ~/.kaggle/access_token)` then `node -e "import('./dataset-pipeline/src/kaggle-source.ts').then(m=>m.fetchKaggleCsv())"` (downloads the 536 MB CSV into the `kaggle-csv` Docker volume — stays off the host); (3) `node -e "…m.runFilter(4)"`; (4) `node dataset-pipeline/bin/run-kaggle.ts` (~1–1.5 h; hard tier serate-dominated; checkpoint-resumable). Preview difficulty first with `--calibrate`; smoke with `--count 50`. **After changing any pre-filter band / ER band / oversample, add `--fresh`** (clears the namespaced `kaggle-<tier>` checkpoints; a stale cursor would otherwise resume against a different candidate list). Kaggle checkpoints are namespaced `kaggle-<tier>` so they never collide with the 10k `run-all.ts` pipeline.
+
 ## Machine/ops note (2026-06-29)
 - The DP-2 **container-leak fix is now applied to ALL pipeline tools** (qqwing + the Plan 2 HoDoKu/serate runs), via a shared named-container + `docker stop -t 0` force-reaper (`dataset-pipeline/src/docker.ts`). Under Colima, `--rm` alone orphans containers when the client is killed; the named force-stop is what reaps them. Verified **0 leaked containers** across the full 10k run. If you ever see strays, clean with `docker ps -aq --filter name=hodoku- --filter name=qqwing- --filter name=sandbox- | xargs docker stop -t 0`.
 - serate is the hard-tier bottleneck (~155 ms/puzzle on the 2-CPU/2GB VM; only ~30% of HoDoKu candidates land in the ER band), so the hard tier over-generates ~3×. Its container timeout scales per-puzzle and a slow batch is retried, not fatal. Full 10k build ≈ 17 min on this VM.

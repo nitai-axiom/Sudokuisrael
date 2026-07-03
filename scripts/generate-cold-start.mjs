@@ -2,7 +2,7 @@
 // generate-cold-start.mjs — regenerate sudoku_next/app/lib/cold-start-puzzles.ts,
 // the 12-puzzle offline bundle (3 per app tier), from sudoku_150000.json.
 // Deterministic: very_easy/easy/medium by fun_score DESC then puzzle ASC;
-// hard by er_rating ASC then puzzle ASC. DB tier → app label via APP_LABEL.
+// hard by er_rating ASC then puzzle ASC. DB tier → app label via the TIERS table.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -61,6 +61,7 @@ export type ColdStartPuzzle = {
   puzzle: string;
   solution: string;
   givens: number;
+  difficulty: Difficulty;
 };
 
 /**

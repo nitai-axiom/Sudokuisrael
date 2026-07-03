@@ -23,6 +23,8 @@ test('parseKaggleLine parses a data row and normalizes blanks to 0', () => {
 test('parseKaggleLine returns null on malformed rows', () => {
   assert.equal(parseKaggleLine('not,enough'), null);
   assert.equal(parseKaggleLine(`1,${PUZ},${SOL},notanumber,0.0`), null);
+  assert.equal(parseKaggleLine(`1,${PUZ},${SOL},,0.0`), null); // blank clues
+  assert.equal(parseKaggleLine(`1,${PUZ},${SOL},25,`), null);  // blank difficulty
 });
 
 test('prefilterTier assigns very_easy for diff 0 with 25-26 clues', () => {

@@ -11,6 +11,8 @@ export function parseKaggleLine(line: string): KaggleRow | null {
   if (t.startsWith('id,')) return null; // header
   const parts = t.split(',');
   if (parts.length !== 5) return null;
+  // Number('') === 0 (finite), so an empty numeric field would fabricate a bogus row.
+  if (parts[0].trim() === '' || parts[3].trim() === '' || parts[4].trim() === '') return null;
   const sourceId = Number(parts[0]);
   const clues = Number(parts[3]);
   const difficulty = Number(parts[4]);

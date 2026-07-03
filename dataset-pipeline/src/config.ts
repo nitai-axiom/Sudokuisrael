@@ -60,3 +60,48 @@ export const GRADER_BIN = path.join(REPO_ROOT, 'sudoku-generator', 'target', 're
 export const WORK_DIR = path.join(REPO_ROOT, 'dataset-pipeline', '.work');
 export const CHECKPOINT_DIR = path.join(REPO_ROOT, 'dataset-pipeline', 'checkpoints');
 export const OUTPUT_LOWER = path.join(REPO_ROOT, 'sudoku_lower.json');
+
+// ── Kaggle-sourced 150k dataset ─────────────────────────────────────────────
+export const KAGGLE_TARGETS: Record<Tier, number> = {
+  very_easy: 30000,
+  easy: 45000,
+  medium: 45000,
+  hard: 30000,
+};
+
+export type PrefilterBand = { cluesMin: number; cluesMax: number; kdMin: number; kdMax: number };
+
+// Coarse pre-filter on Kaggle's own columns. prefilterTiers() returns EVERY matching tier.
+// Design (tuned by calibration 2026-07-03):
+//  - very_easy vs easy are made DISJOINT by clue count (25-26 vs 23-24). Both are Rust-"easy",
+//    so if their bands overlapped a puzzle would be accepted by both and the cross-tier dedup
+//    would starve `easy` (observed: easy fell to 27/50 in a smoke). Disjoint bands fix that.
+//  - medium and hard intentionally SHARE a band (same clues, hard's difficulty ⊂ medium's).
+//    They are separated by the GRADERS, not the band: medium keeps Rust-"medium" (ER≲3.4),
+//    hard keeps serate ER 3.4-4.5 (Rust returns null there). A puzzle is accepted by at most
+//    one of them; the rare ER≈3.4 edge is caught by cross-tier dedup.
+//  - low tiers (diff 0-1) never collide with mid tiers (diff 1-3) because they are disjoint by
+//    difficulty.
+export const KAGGLE_PREFILTER: Record<Tier, PrefilterBand> = {
+  very_easy: { cluesMin: 25, cluesMax: 26, kdMin: 0,   kdMax: 0   },
+  easy:      { cluesMin: 23, cluesMax: 24, kdMin: 0,   kdMax: 1.0 },
+  medium:    { cluesMin: 22, cluesMax: 26, kdMin: 1.0, kdMax: 3.0 },
+  hard:      { cluesMin: 22, cluesMax: 26, kdMin: 1.0, kdMax: 2.5 },
+};
+
+// Fair-hard serate ER band for the Kaggle hard tier.
+// Owner decision 2026-07-03 ("allow slightly harder for volume"): 3.4–4.5 = wings/fish and
+// light patterns — pure logic, no guessing — while excluding the ER>4.5 coloring/deep-chain
+// ("not fun") zone. serate returns an ER in this range ONLY if it solved the puzzle logically,
+// so the band itself is the no-guessing guarantee (no Rust solvable-gate needed for hard).
+export const HARD_ER_MIN_FAIR = 3.4;
+export const HARD_ER_MAX_FAIR = 4.5;
+
+export const OUTPUT_150K = path.join(REPO_ROOT, 'sudoku_150000.json');
+export const CALIBRATION_N = 500; // candidates per tier sampled by --calibrate
+
+// Kaggle fetch (in-sandbox)
+export const KAGGLE_IMAGE = 'sudoku-kaggle';
+export const KAGGLE_DATASET = 'radcliffe/3-million-sudoku-puzzles-with-ratings';
+export const KAGGLE_CSV_NAME = 'sudoku-3m.csv';
+export const KAGGLE_VOLUME = 'kaggle-csv';

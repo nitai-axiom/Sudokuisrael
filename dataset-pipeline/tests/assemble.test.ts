@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sortRecords } from '../src/assemble.ts';
+import { sortRecords, assignIds } from '../src/assemble.ts';
+import type { PuzzleRecord } from '../src/record.ts';
 
 const rec = (difficulty: any, givens: number) => ({
   puzzle: '1'.repeat(givens) + '0'.repeat(81 - givens), solution: '123456789'.repeat(9),
@@ -23,4 +24,21 @@ test('hard sorts last after very_easy/easy/medium', () => {
   });
   const out = sortRecords([hardRec('hard', 24), hardRec('very_easy', 40), hardRec('medium', 30)]);
   assert.deepEqual(out.map((r) => r.difficulty), ['very_easy', 'medium', 'hard']);
+});
+
+function puzzleRec(difficulty: PuzzleRecord['difficulty'], givens: number): PuzzleRecord {
+  return {
+    id: 0, source_id: null, puzzle: '0'.repeat(81 - givens) + '1'.repeat(givens),
+    solution: Array.from({ length: 81 }, (_, i) => String((i % 9) + 1)).join(''),
+    difficulty, techniques: ['naked_single'], givens, er_rating: null, fun_score: 1,
+    generated_at: 'x',
+  };
+}
+
+test('assignIds numbers rows 1..N contiguously in sorted (tier) order', () => {
+  const rows = [puzzleRec('hard', 22), puzzleRec('very_easy', 26), puzzleRec('easy', 24)];
+  const out = assignIds(rows);
+  assert.deepEqual(out.map((r) => r.id), [1, 2, 3]);
+  assert.deepEqual(out.map((r) => r.difficulty), ['very_easy', 'easy', 'hard']); // sortRecords order
+  assert.equal(out[out.length - 1].id, out.length);
 });

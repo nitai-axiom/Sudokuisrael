@@ -77,5 +77,16 @@ The dataset pipeline splits puzzle generation and grading into two independently
 
 This architecture ensures that **the puzzle source is provably isolated** (qqwing cannot bias the data or leak to external systems), while **technique grading** (which requires the full Rust ecosystem) runs in the host where we can trust the implementation end-to-end.
 
+## Dataset Pipeline Architecture (Kaggle recalibration — 2026-07-03, current shipping path)
+
+The `sudoku_150000.json` dataset does **not** generate puzzles — it *sources* them from Kaggle's "3-million-sudoku-puzzles-with-ratings" (radcliffe) and re-validates/re-rates with the same trusted graders. Same two-zone trust model, extended to untrusted **data**:
+
+1. **Fetch (sandbox, network on only here):** `sandbox/kaggle.Dockerfile` builds a minimal `sudoku-kaggle` image (curl/unzip/node). `kaggle-source.ts:fetchKaggleCsv()` downloads the 536 MB CSV via **Bearer/KGAT token** into a Docker **named volume** `kaggle-csv` — the raw file never touches the host FS. SHA pinned in `sandbox/kaggle.lock`.
+2. **Filter (sandbox, `--network none`):** `kaggle-filter-cli.ts` streams the CSV in-container, buckets rows into per-tier candidate pools by (clues, difficulty) via `kaggle-filter.ts:prefilterTiers()` (bands **may overlap** — a puzzle can be a candidate for medium *and* hard), and writes a small candidate JSONL to the host. Only 81-char puzzle strings + ids cross back.
+3. **Validate / re-rate (existing graders):** `kaggle-pipeline.ts:buildKaggleTier()` runs qqwing (uniqueness, trusted solution), the Rust grader (lower-tier technique classification), and **serate** (hard-tier ER, sandboxed) over each candidate pool with a resumable checkpoint **+ cursor**. Accept gates: lower = Rust grade matches tier; hard = serate ER ∈ **[3.4, 4.5]** (the band *is* the no-guessing gate — no Rust solvable-gate for hard). Medium/hard are separated by the graders, not the band.
+4. **Assemble:** `assemble.ts:assembleKaggle()` cross-tier dedupes, sorts, assigns sequential `id` 1…N, writes `sudoku_150000.json` (gitignored). Entry point: `bin/run-kaggle.ts` (`--calibrate` = per-tier accept-rate report + samples, the owner gate; `--count N` = smoke; no arg = full build).
+
+Key finding: the Kaggle set is **bimodal** (puzzles are either straightforward or jump to obscure), so "fair-hard" is scarce — the tiers were tuned around that. See DECISIONS 2026-07-03.
+
 ## The big architectural issue — RESOLVED (Phase 3 v1)
 The game used to be implemented **twice**: properly in `lib/sudoku-engine.ts`, and again (worse) as inline JS in `index.html`. As of Phase 3 v1, the new `web/` app plays exclusively through the engine — there is now one implementation. `index.html`'s inline logic is dead; the file remains only as a visual reference until parity is confirmed, then it gets deleted.

@@ -27,3 +27,23 @@ test('validateRecord rejects bad lengths and empty techniques', () => {
   assert.ok(validateRecord({ ...r, solution: '123' }).length > 0);
   assert.ok(validateRecord({ ...r, techniques: [] }).length > 0);
 });
+
+test('buildRecord carries source_id and defaults id to 0', () => {
+  const solution = '1'.repeat(81).replace(/./g, (_, i) => String((i % 9) + 1));
+  const puzzle = '0'.repeat(56) + solution.slice(56); // 25 givens, asymmetric
+  const r = buildRecord({
+    puzzle, solution, tier: 'very_easy',
+    grade: { techniques: ['naked_single'] }, funScore: 3, now: '2026-07-02T00:00:00Z',
+    sourceId: 284123,
+  });
+  assert.equal(r.source_id, 284123);
+  assert.equal(r.id, 0);
+  assert.equal(r.difficulty, 'very_easy');
+});
+
+test('buildRecord defaults source_id to null when omitted', () => {
+  const solution = Array.from({ length: 81 }, (_, i) => String((i % 9) + 1)).join('');
+  const puzzle = '0'.repeat(56) + solution.slice(56);
+  const r = buildRecord({ puzzle, solution, tier: 'easy', grade: { techniques: ['naked_single'] }, funScore: 2, now: 'x' });
+  assert.equal(r.source_id, null);
+});

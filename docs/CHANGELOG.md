@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-07-03 — Kaggle-sourced, difficulty-recalibrated 150k dataset (`sudoku_150000.json`)
+**What:** Built a new **148,206-puzzle** dataset sourced from Kaggle's 3M rated set, re-validated and re-rated by our own trusted graders. Tiers: very_easy 30,000 · easy 45,000 · medium 45,000 · **hard 28,206**. 0 duplicates, 0 malformed, ids 1…148,206, every record carries its Kaggle `source_id`. Hard tier serate ER **3.4–4.5** (median 4.2) — challenging but pure-logic (no guessing/coloring/chains). 68 MB, built in ~1h15m entirely in-sandbox.
+**Why:** Owner: games too hard / not fun. Fixes gentle entry (75% pure-scanning at very_easy) and a fair-but-fun hard tier. The old generated hard tier reached serate ER up to 5.0 (obscure zone); the retune caps it at 4.5 and sources from Kaggle's mid-difficulty where fair puzzles live.
+**Pipeline (all sandboxed):** fetch the 536 MB CSV into a Docker **volume** via Bearer/KGAT token (never on host) → in-container `--network none` filter to per-tier candidate pools → qqwing uniqueness + Rust grader (lower) + serate ER (hard) → sequential-id assembly → `sudoku_150000.json` (gitignored, 68 MB). Entry point `dataset-pipeline/bin/run-kaggle.ts` — `--calibrate` reports per-tier accept rate + sample puzzles (owner gate); no arg = full build; `--count N` = smoke. Checkpoint + cursor resumable.
+**Key design (from calibration — dataset is bimodal):** medium & hard share a pre-filter band, split by the graders (Rust-medium vs serate 3.4–4.5); very_easy/easy bands made disjoint by clue count to stop tier cannibalization (a smoke caught easy falling to 27/50); Rust solvable-gate dropped for hard (serate ER band is the no-guessing proof); cross-tier dedup at assembly.
+**Files:** new `src/{kaggle-filter,kaggle-filter-cli,kaggle-source,kaggle-pipeline}.ts`, `bin/run-kaggle.ts`, `sandbox/{kaggle.Dockerfile,build-kaggle.sh,kaggle.lock}`; extended `record.ts` (id/source_id), `config.ts` (Kaggle bands/targets/fair-hard ER), `assemble.ts` (assignIds + assembleKaggle + cross-tier dedup), `checkpoint.ts` (cursor). 98 tests green. Spec + plan under `docs/superpowers/`.
+
+## 2026-06-29 — New repo `sudoku_next`: standalone rebuild seeded from web/
+**What:** Created a new **private** GitHub repo **`nitai-axiom/sudoku_next`** (https://github.com/nitai-axiom/sudoku_next, default branch `main`) as the clean-slate target for rebuilding the site from scratch toward a Supabase-backed deployment. Seeded it with a **self-contained copy of the current `web/` Next.js app**.
+
+**Why:** Owner decided to rebuild + deploy the whole site fresh on Supabase. Starting point = the working game, but extracted so it no longer depends on the pipeline repo's root.
+
+**How it was made self-contained:** `web/` depended on two parent-root files via tsconfig aliases — `@engine` → `../lib/sudoku-engine.ts` and `@puzzles` → `../puzzles.json` — plus a `next.config.ts` that pointed Turbopack's root at the parent dir. Copied `lib/sudoku-engine.ts` and `puzzles.json` into the new repo, rewired both aliases to in-repo paths, and reset `next.config.ts` to a plain config. **Verified `next build` passes clean** before pushing. Note: it still bundles the small `puzzles.json`, not `sudoku_10000.json` — moving to the full dataset via Supabase is the next step in the new repo.
+
 ## 2026-06-29 — Plan 2 COMPLETE: hard tier via sandboxed HoDoKu + serate; full 10,000-puzzle dataset produced
 **What:** Finished the hard tier and produced the complete **`sudoku_10000.json`** — **10,000 validated records**: very_easy 2,000 · easy 3,000 · medium 3,000 · **hard 2,000**. Built in ~17 min on a 2-CPU/2GB Colima VM. Validation: **0 malformed grids, 0 duplicate puzzles** across the whole dataset, hard ER range **3.4–4.6** (all in the 3.4–5.0 band), hard `fun_score` all null, and **0 leaked containers** (DP-2 holds end-to-end).
 

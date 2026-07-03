@@ -66,8 +66,11 @@ export async function buildKaggleTier(tier: Tier, candidates: Candidate[], opts?
   const grade = opts?.gradeBatch ?? realGrade;
   const rateF = opts?.rate ?? realRate;
 
-  let survivors = loadCheckpoint(tier);
-  let cursor = loadCursor(tier);
+  // Namespace Kaggle checkpoints so they can never collide with the 10k generate-pipeline,
+  // which checkpoints under the bare tier name.
+  const ckey = `kaggle-${tier}`;
+  let survivors = loadCheckpoint(ckey);
+  let cursor = loadCursor(ckey);
 
   while (survivors.length < target && cursor < candidates.length) {
     const batch = candidates.slice(cursor, cursor + BATCH_SIZE);
@@ -89,10 +92,10 @@ export async function buildKaggleTier(tier: Tier, candidates: Candidate[], opts?
     }
 
     const fresh = dedupeByPuzzle([...survivors, ...accepted]).slice(survivors.length);
-    appendCheckpoint(tier, fresh);
+    appendCheckpoint(ckey, fresh);
     survivors = survivors.concat(fresh);
     cursor += batch.length;
-    saveCursor(tier, cursor);
+    saveCursor(ckey, cursor);
     process.stderr.write(`\r  ${tier}: ${survivors.length}/${target} (consumed ${cursor}/${candidates.length})`);
   }
   process.stderr.write('\n');

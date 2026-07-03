@@ -1,9 +1,11 @@
+import fs from 'node:fs';
 import { CALIBRATION_N, HARD_ER_MIN_FAIR, HARD_ER_MAX_FAIR, KAGGLE_TARGETS, TIERS, type LowerTier } from '../src/config.ts';
 import { loadCandidates } from '../src/kaggle-source.ts';
 import { solveAndCount } from '../src/qqwing.ts';
 import { gradeBatch } from '../src/grader.ts';
 import { rate } from '../src/serate.ts';
 import { acceptKaggleLower, acceptKaggleHard } from '../src/kaggle-pipeline.ts';
+import { checkpointPath, cursorPath } from '../src/checkpoint.ts';
 import { assembleKaggle } from '../src/assemble.ts';
 import type { PuzzleRecord } from '../src/record.ts';
 
@@ -11,6 +13,17 @@ const argv = process.argv.slice(2);
 const calibrate = argv.includes('--calibrate');
 const ci = argv.indexOf('--count');
 const target = ci >= 0 ? Number(argv[ci + 1]) : undefined;
+
+// --fresh: clear the namespaced Kaggle checkpoints before building. REQUIRED after any change to
+// the pre-filter bands / ER band / oversample, since a stale cursor+checkpoint would otherwise
+// resume against a different candidate list and silently bias the result.
+if (argv.includes('--fresh')) {
+  for (const t of TIERS) {
+    fs.rmSync(checkpointPath(`kaggle-${t}`), { force: true });
+    fs.rmSync(cursorPath(`kaggle-${t}`), { force: true });
+  }
+  process.stderr.write('cleared kaggle checkpoints (--fresh)\n');
+}
 
 /**
  * Calibration gate: run up to CALIBRATION_N candidates/tier through the REAL accept gates

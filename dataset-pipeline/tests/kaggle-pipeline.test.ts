@@ -60,7 +60,7 @@ test('hard: accepts a serate-fair puzzle even when the Rust grader returns null 
 
 const SOLc = Array.from({ length: 81 }, (_, i) => String((i % 9) + 1)).join('');
 function puz(n: number) { return String(n % 10).repeat(56) + SOLc.slice(56); } // 81 chars, distinct per n (0-9)
-function cleanMedium() { fs.rmSync(checkpointPath('medium'), { force: true }); fs.rmSync(cursorPath('medium'), { force: true }); }
+function cleanMedium() { fs.rmSync(checkpointPath('kaggle-medium'), { force: true }); fs.rmSync(cursorPath('kaggle-medium'), { force: true }); }
 const fakeSolve = async (ps: string[]): Promise<SolveResult[]> => ps.map((p) => ({ puzzle: p, solution: SOLc, solutionCount: 1 }));
 const fakeGrade = async (ps: string[]): Promise<Grade[]> => ps.map(() => ({ solvable: true, difficulty: 'medium', techniques: ['naked_pair'] }));
 

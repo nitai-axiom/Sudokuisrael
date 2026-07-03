@@ -26,12 +26,22 @@ export function parseKaggleLine(line: string): KaggleRow | null {
   return { sourceId, puzzle, clues, difficulty };
 }
 
+function inBand(clues: number, difficulty: number, tier: Tier): boolean {
+  const b = KAGGLE_PREFILTER[tier];
+  return clues >= b.cluesMin && clues <= b.cluesMax && difficulty >= b.kdMin && difficulty <= b.kdMax;
+}
+
+/** First matching tier in TIERS order, or null. (Kept for single-membership callers/tests.) */
 export function prefilterTier(clues: number, difficulty: number): Tier | null {
-  for (const tier of TIERS) {
-    const b = KAGGLE_PREFILTER[tier];
-    if (clues >= b.cluesMin && clues <= b.cluesMax && difficulty >= b.kdMin && difficulty <= b.kdMax) {
-      return tier;
-    }
-  }
+  for (const tier of TIERS) if (inBand(clues, difficulty, tier)) return tier;
   return null;
+}
+
+/**
+ * EVERY tier whose band contains (clues, difficulty). Bands overlap by design, so a puzzle
+ * can be a candidate for several tiers at once (e.g. medium AND hard); the graders decide
+ * which tier(s) actually accept it, and cross-tier dedup at assembly keeps one.
+ */
+export function prefilterTiers(clues: number, difficulty: number): Tier[] {
+  return TIERS.filter((tier) => inBand(clues, difficulty, tier));
 }

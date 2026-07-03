@@ -33,20 +33,29 @@ test('lower: rejects unsolvable (needs guessing)', () => {
   assert.equal(acceptKaggleLower({ tier: 'easy', solve: uniqueSolve, grade: g, sourceId: 1, now: 'x' }), null);
 });
 
-test('hard: accepts inside the fair band with a logic-solvable grade', () => {
-  const r = acceptKaggleHard({ solve: uniqueSolve, er: 3.2, grade: { solvable: true, difficulty: 'hard', techniques: ['x_wing'] }, sourceId: 9, now: 'x' });
+test('hard: accepts inside the fair band [3.4, 4.5]', () => {
+  const r = acceptKaggleHard({ solve: uniqueSolve, er: 4.0, grade: { solvable: true, difficulty: 'hard', techniques: ['x_wing'] }, sourceId: 9, now: 'x' });
   assert.ok(r);
   assert.equal(r!.difficulty, 'hard');
-  assert.equal(r!.er_rating, 3.2);
+  assert.equal(r!.er_rating, 4.0);
   assert.equal(r!.source_id, 9);
 });
 
-test('hard: rejects ER above the fair ceiling (obscure-technique zone)', () => {
+test('hard: rejects ER above the fair ceiling (>4.5 = coloring/deep-chains)', () => {
   assert.equal(acceptKaggleHard({ solve: uniqueSolve, er: 4.6, grade: { solvable: true, difficulty: 'hard', techniques: ['coloring'] }, sourceId: 1, now: 'x' }), null);
 });
 
-test('hard: rejects when grader says it needs guessing', () => {
-  assert.equal(acceptKaggleHard({ solve: uniqueSolve, er: 3.2, grade: { solvable: false, difficulty: null, techniques: [] }, sourceId: 1, now: 'x' }), null);
+test('hard: rejects ER below the floor (<3.4 belongs in medium)', () => {
+  assert.equal(acceptKaggleHard({ solve: uniqueSolve, er: 3.0, grade: { solvable: true, difficulty: 'medium', techniques: ['naked_pair'] }, sourceId: 1, now: 'x' }), null);
+});
+
+test('hard: accepts a serate-fair puzzle even when the Rust grader returns null (band is the no-guessing gate)', () => {
+  // The Rust grader cannot solve X-Wing+ and returns null there; serate ER in the fair band
+  // already proves the puzzle is logically solvable, so hard does NOT gate on grade.solvable.
+  const r = acceptKaggleHard({ solve: uniqueSolve, er: 4.0, grade: { solvable: false, difficulty: null, techniques: [] }, sourceId: 5, now: 'x' });
+  assert.ok(r);
+  assert.equal(r!.difficulty, 'hard');
+  assert.deepEqual(r!.techniques, ['x_wing']); // fallback tag when grader gave none
 });
 
 const SOLc = Array.from({ length: 81 }, (_, i) => String((i % 9) + 1)).join('');

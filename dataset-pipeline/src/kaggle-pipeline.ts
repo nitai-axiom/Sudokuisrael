@@ -32,8 +32,10 @@ export function acceptKaggleHard(args: {
 }): PuzzleRecord | null {
   const { solve, er, grade, sourceId, now } = args;
   if (solve.solutionCount !== 1 || !solve.solution) return null;
+  // serate yields an ER in the fair band ONLY when it solved the puzzle by pure logic, so the
+  // band IS the no-guessing gate. The Rust grader is NOT used to gate hard: it returns null for
+  // anything past its medium repertoire (X-Wing and up), which would wrongly reject fair-hard.
   if (er === null || er < HARD_ER_MIN_FAIR || er > HARD_ER_MAX_FAIR) return null;
-  if (!grade.solvable) return null;                                // no guessing
   if (!passesClueFloor(solve.puzzle, false)) return null;
   const tech = grade.techniques.length > 0 ? grade.techniques : ['x_wing'];
   const record = buildRecord({

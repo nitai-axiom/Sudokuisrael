@@ -71,20 +71,25 @@ export const KAGGLE_TARGETS: Record<Tier, number> = {
 
 export type PrefilterBand = { cluesMin: number; cluesMax: number; kdMin: number; kdMax: number };
 
-// Coarse pre-filter on Kaggle's own columns. Priority order = TIERS order:
-// prefilterTier() returns the FIRST matching tier, so overlapping bands are fine.
-// Starting points — confirmed/tuned by the calibration step (bin/run-kaggle.ts --calibrate).
+// Coarse pre-filter on Kaggle's own columns. Bands MAY overlap: prefilterTiers()
+// returns EVERY matching tier, so a puzzle can be a candidate for more than one tier
+// (the graders then decide; cross-tier dedup at assembly keeps one). Tuned by calibration
+// (2026-07-03): the dataset is bimodal, so medium (Rust-graded) and hard (serate-graded)
+// both draw from the same low Kaggle-difficulty band and are separated by our graders.
 export const KAGGLE_PREFILTER: Record<Tier, PrefilterBand> = {
   very_easy: { cluesMin: 25, cluesMax: 26, kdMin: 0,   kdMax: 0   },
   easy:      { cluesMin: 24, cluesMax: 26, kdMin: 0,   kdMax: 1.0 },
   medium:    { cluesMin: 23, cluesMax: 25, kdMin: 1.0, kdMax: 3.0 },
-  hard:      { cluesMin: 22, cluesMax: 25, kdMin: 3.0, kdMax: 5.5 },
+  hard:      { cluesMin: 22, cluesMax: 26, kdMin: 1.0, kdMax: 2.5 },
 };
 
-// Fair-hard serate ER band (replaces ER_MIN/ER_MAX for the Kaggle hard tier).
-// Excludes the ~4.2+ chains/coloring zone. Final values set by calibration.
-export const HARD_ER_MIN_FAIR = 2.8;
-export const HARD_ER_MAX_FAIR = 3.8;
+// Fair-hard serate ER band for the Kaggle hard tier.
+// Owner decision 2026-07-03 ("allow slightly harder for volume"): 3.4–4.5 = wings/fish and
+// light patterns — pure logic, no guessing — while excluding the ER>4.5 coloring/deep-chain
+// ("not fun") zone. serate returns an ER in this range ONLY if it solved the puzzle logically,
+// so the band itself is the no-guessing guarantee (no Rust solvable-gate needed for hard).
+export const HARD_ER_MIN_FAIR = 3.4;
+export const HARD_ER_MAX_FAIR = 4.5;
 
 export const OUTPUT_150K = path.join(REPO_ROOT, 'sudoku_150000.json');
 export const CALIBRATION_N = 500; // candidates per tier sampled by --calibrate

@@ -1,22 +1,26 @@
 import fs from 'node:fs';
 import readline from 'node:readline';
 import { KAGGLE_TARGETS, TIERS, type Tier } from './config.ts';
-import { parseKaggleLine, prefilterTier } from './kaggle-filter.ts';
+import { parseKaggleLine, prefilterTiers } from './kaggle-filter.ts';
 
 export type CandidateOut = { tier: Tier; sourceId: number; puzzle: string };
 
-/** Pure core: bucket lines into tiers up to per-tier caps. */
+/**
+ * Pure core: bucket lines into tiers up to per-tier caps. A single row is emitted to EVERY
+ * matching tier that still has cap headroom (bands overlap by design), so one puzzle can be a
+ * candidate for more than one tier.
+ */
 export function filterLines(lines: Iterable<string>, caps: Record<Tier, number>): CandidateOut[] {
   const counts: Record<string, number> = { very_easy: 0, easy: 0, medium: 0, hard: 0 };
   const out: CandidateOut[] = [];
   for (const line of lines) {
     const row = parseKaggleLine(line);
     if (!row) continue;
-    const tier = prefilterTier(row.clues, row.difficulty);
-    if (!tier) continue;
-    if (counts[tier] >= caps[tier]) continue;
-    counts[tier]++;
-    out.push({ tier, sourceId: row.sourceId, puzzle: row.puzzle });
+    for (const tier of prefilterTiers(row.clues, row.difficulty)) {
+      if (counts[tier] >= caps[tier]) continue;
+      counts[tier]++;
+      out.push({ tier, sourceId: row.sourceId, puzzle: row.puzzle });
+    }
     if (TIERS.every((t) => counts[t] >= caps[t])) break; // all tiers full → stop early
   }
   return out;
@@ -33,8 +37,8 @@ async function main() {
   const counts: Record<string, number> = { very_easy: 0, easy: 0, medium: 0, hard: 0 };
   const ws = fs.createWriteStream(outPath);
   for await (const line of rl) {
-    const [c] = filterLines([line], { very_easy: caps.very_easy - counts.very_easy, easy: caps.easy - counts.easy, medium: caps.medium - counts.medium, hard: caps.hard - counts.hard });
-    if (c) { counts[c.tier]++; ws.write(JSON.stringify(c) + '\n'); }
+    const remaining = { very_easy: caps.very_easy - counts.very_easy, easy: caps.easy - counts.easy, medium: caps.medium - counts.medium, hard: caps.hard - counts.hard } as Record<Tier, number>;
+    for (const c of filterLines([line], remaining)) { counts[c.tier]++; ws.write(JSON.stringify(c) + '\n'); }
     if (TIERS.every((t) => counts[t] >= caps[t])) break;
   }
   ws.end();

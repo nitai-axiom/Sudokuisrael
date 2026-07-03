@@ -34,10 +34,11 @@ test('Kaggle targets sum to 150000', async () => {
   assert.equal(sum, 150000);
 });
 
-test('fair-hard band excludes the obscure-technique zone', async () => {
+test('fair-hard band excludes the deep-chain/coloring zone', async () => {
   const { HARD_ER_MIN_FAIR, HARD_ER_MAX_FAIR } = await import('../src/config.ts');
   assert.ok(HARD_ER_MIN_FAIR < HARD_ER_MAX_FAIR);
-  assert.ok(HARD_ER_MAX_FAIR <= 4.0); // stays below the chains/coloring zone
+  assert.ok(HARD_ER_MIN_FAIR >= 3.4);       // hard starts above medium's repertoire
+  assert.ok(HARD_ER_MAX_FAIR <= 4.5);       // owner cap: no ER>4.5 (coloring/deep chains)
 });
 
 test('every tier has a pre-filter band with sane bounds', async () => {

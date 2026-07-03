@@ -17,6 +17,10 @@ export function sortRecords(rows: PuzzleRecord[]): PuzzleRecord[] {
   });
 }
 
+export function assignIds(rows: PuzzleRecord[]): PuzzleRecord[] {
+  return sortRecords(rows).map((r, i) => ({ ...r, id: i + 1 }));
+}
+
 export async function assembleLower(opts?: { target?: number; now?: () => string }): Promise<PuzzleRecord[]> {
   const all: PuzzleRecord[] = [];
   for (const tier of LOWER_TIERS) {

@@ -60,3 +60,37 @@ export const GRADER_BIN = path.join(REPO_ROOT, 'sudoku-generator', 'target', 're
 export const WORK_DIR = path.join(REPO_ROOT, 'dataset-pipeline', '.work');
 export const CHECKPOINT_DIR = path.join(REPO_ROOT, 'dataset-pipeline', 'checkpoints');
 export const OUTPUT_LOWER = path.join(REPO_ROOT, 'sudoku_lower.json');
+
+// ── Kaggle-sourced 150k dataset ─────────────────────────────────────────────
+export const KAGGLE_TARGETS: Record<Tier, number> = {
+  very_easy: 30000,
+  easy: 45000,
+  medium: 45000,
+  hard: 30000,
+};
+
+export type PrefilterBand = { cluesMin: number; cluesMax: number; kdMin: number; kdMax: number };
+
+// Coarse pre-filter on Kaggle's own columns. Priority order = TIERS order:
+// prefilterTier() returns the FIRST matching tier, so overlapping bands are fine.
+// Starting points — confirmed/tuned by the calibration step (bin/run-kaggle.ts --calibrate).
+export const KAGGLE_PREFILTER: Record<Tier, PrefilterBand> = {
+  very_easy: { cluesMin: 25, cluesMax: 26, kdMin: 0,   kdMax: 0   },
+  easy:      { cluesMin: 24, cluesMax: 26, kdMin: 0,   kdMax: 1.0 },
+  medium:    { cluesMin: 23, cluesMax: 25, kdMin: 1.0, kdMax: 3.0 },
+  hard:      { cluesMin: 22, cluesMax: 25, kdMin: 3.0, kdMax: 5.5 },
+};
+
+// Fair-hard serate ER band (replaces ER_MIN/ER_MAX for the Kaggle hard tier).
+// Excludes the ~4.2+ chains/coloring zone. Final values set by calibration.
+export const HARD_ER_MIN_FAIR = 2.8;
+export const HARD_ER_MAX_FAIR = 3.8;
+
+export const OUTPUT_150K = path.join(REPO_ROOT, 'sudoku_150000.json');
+export const CALIBRATION_N = 500; // candidates per tier sampled by --calibrate
+
+// Kaggle fetch (in-sandbox)
+export const KAGGLE_IMAGE = 'sudoku-kaggle';
+export const KAGGLE_DATASET = 'radcliffe/3-million-sudoku-puzzles-with-ratings';
+export const KAGGLE_CSV_NAME = 'sudoku-3m.csv';
+export const KAGGLE_VOLUME = 'kaggle-csv';

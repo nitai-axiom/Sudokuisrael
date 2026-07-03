@@ -358,7 +358,8 @@ test("toColdStartTs keeps the static helper exports and emits 12 entries", () =>
   assert.match(ts, /export function firstColdStart/);
   assert.match(ts, /export function randomColdStart/);
   assert.match(ts, /export const COLD_START: ColdStartPuzzle\[\] = \[/);
-  assert.equal((ts.match(/difficulty:/g) || []).length, 12);
+  assert.match(ts, /difficulty: Difficulty;/); // type field present (matches real file)
+  assert.equal((ts.match(/difficulty: "/g) || []).length, 12); // 12 puzzle object entries
 });
 ```
 

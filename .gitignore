@@ -9,3 +9,4 @@ dataset-pipeline/.work/
 dataset-pipeline/checkpoints/
 sudoku_lower.json
 sudoku_10000.json
+sudoku_150000.json

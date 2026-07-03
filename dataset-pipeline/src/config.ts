@@ -71,15 +71,21 @@ export const KAGGLE_TARGETS: Record<Tier, number> = {
 
 export type PrefilterBand = { cluesMin: number; cluesMax: number; kdMin: number; kdMax: number };
 
-// Coarse pre-filter on Kaggle's own columns. Bands MAY overlap: prefilterTiers()
-// returns EVERY matching tier, so a puzzle can be a candidate for more than one tier
-// (the graders then decide; cross-tier dedup at assembly keeps one). Tuned by calibration
-// (2026-07-03): the dataset is bimodal, so medium (Rust-graded) and hard (serate-graded)
-// both draw from the same low Kaggle-difficulty band and are separated by our graders.
+// Coarse pre-filter on Kaggle's own columns. prefilterTiers() returns EVERY matching tier.
+// Design (tuned by calibration 2026-07-03):
+//  - very_easy vs easy are made DISJOINT by clue count (25-26 vs 23-24). Both are Rust-"easy",
+//    so if their bands overlapped a puzzle would be accepted by both and the cross-tier dedup
+//    would starve `easy` (observed: easy fell to 27/50 in a smoke). Disjoint bands fix that.
+//  - medium and hard intentionally SHARE a band (same clues, hard's difficulty ⊂ medium's).
+//    They are separated by the GRADERS, not the band: medium keeps Rust-"medium" (ER≲3.4),
+//    hard keeps serate ER 3.4-4.5 (Rust returns null there). A puzzle is accepted by at most
+//    one of them; the rare ER≈3.4 edge is caught by cross-tier dedup.
+//  - low tiers (diff 0-1) never collide with mid tiers (diff 1-3) because they are disjoint by
+//    difficulty.
 export const KAGGLE_PREFILTER: Record<Tier, PrefilterBand> = {
   very_easy: { cluesMin: 25, cluesMax: 26, kdMin: 0,   kdMax: 0   },
-  easy:      { cluesMin: 24, cluesMax: 26, kdMin: 0,   kdMax: 1.0 },
-  medium:    { cluesMin: 23, cluesMax: 25, kdMin: 1.0, kdMax: 3.0 },
+  easy:      { cluesMin: 23, cluesMax: 24, kdMin: 0,   kdMax: 1.0 },
+  medium:    { cluesMin: 22, cluesMax: 26, kdMin: 1.0, kdMax: 3.0 },
   hard:      { cluesMin: 22, cluesMax: 26, kdMin: 1.0, kdMax: 2.5 },
 };
 

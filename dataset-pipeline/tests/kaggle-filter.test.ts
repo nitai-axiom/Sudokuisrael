@@ -32,13 +32,15 @@ test('prefilterTier assigns very_easy for diff 0 with 25-26 clues', () => {
   assert.equal(prefilterTier(26, 0), 'very_easy');
 });
 
-test('prefilterTier priority: 24-clue diff-0 falls to easy (not very_easy)', () => {
+test('prefilterTier 24-clue diff-0 → easy (disjoint from very_easy 25-26)', () => {
   assert.equal(prefilterTier(24, 0), 'easy');
 });
 
-test('prefilterTier assigns medium (first match) and hard by difficulty', () => {
-  assert.equal(prefilterTier(24, 2.0), 'medium'); // matches medium AND hard; first-in-TIERS wins
-  assert.equal(prefilterTier(22, 2.0), 'hard');   // 22 clues below medium's min → hard only
+test('prefilterTier single-match: medium shadows hard (their bands share clues+diff)', () => {
+  // medium and hard share clues 22-26; medium (checked first) covers diff 1-3 ⊇ hard's 1-2.5,
+  // so the legacy single-match prefilterTier never returns hard — that split is graders' job.
+  assert.equal(prefilterTier(24, 2.0), 'medium');
+  assert.equal(prefilterTier(22, 2.0), 'medium');
 });
 
 test('prefilterTier returns null outside all bands', () => {
@@ -46,9 +48,10 @@ test('prefilterTier returns null outside all bands', () => {
   assert.equal(prefilterTier(20, 0.5), null); // clues below every band
 });
 
-test('prefilterTiers returns EVERY matching tier (overlapping bands)', () => {
-  assert.deepEqual(prefilterTiers(25, 0), ['very_easy', 'easy']); // diff-0, 25 clues → both low tiers
-  assert.deepEqual(prefilterTiers(24, 2.0), ['medium', 'hard']);  // mid diff, 24 clues → both mid tiers
-  assert.deepEqual(prefilterTiers(22, 2.0), ['hard']);            // hard only
-  assert.deepEqual(prefilterTiers(31, 8.5), []);                  // none
+test('prefilterTiers returns EVERY matching tier', () => {
+  assert.deepEqual(prefilterTiers(25, 0), ['very_easy']);        // 25-clue diff-0 → very_easy only (easy is 23-24)
+  assert.deepEqual(prefilterTiers(24, 0.5), ['easy']);           // 24-clue diff-0.5 → easy only (low tiers disjoint)
+  assert.deepEqual(prefilterTiers(24, 2.0), ['medium', 'hard']); // mid diff → both mid tiers (graders split)
+  assert.deepEqual(prefilterTiers(22, 2.0), ['medium', 'hard']); // 22 clues now in medium too
+  assert.deepEqual(prefilterTiers(31, 8.5), []);                 // none
 });

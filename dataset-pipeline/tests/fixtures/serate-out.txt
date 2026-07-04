@@ -1,0 +1,22 @@
+# serate characterization fixture — captured 2026-06-29 on Colima arm64 VM.
+# Command: docker run --rm --network none -v <WORK>:/work sudoku-jars
+#          java -Xrs -Xmx500m -cp /opt/serate.jar diuf.sudoku.test.serate
+#          --format=%r --input=/work/in.txt
+#
+# serate version: 1.18.1
+# Class: diuf.sudoku.test.serate (via -cp, NOT -jar)
+# Input format: 81-char digit strings (0 for blanks), one per line.
+# Output format (--format=%r): one floating-point ER per line, matching INPUT ORDER.
+#   Default format is %r/%p/%d (ER/pearl/diamond); we use --format=%r for ER-only output.
+# ER token: the entire line is the ER number (e.g. "3.2"), no prefix/suffix.
+# Order: output order == input order (confirmed: 3 puzzles, output is index-stable).
+#
+# Input puzzles (81-char, dots normalized to 0):
+# 1: 003000620000000000800900100000041030040709008900500000072000004510600200000008000
+# 2: 900710000040000000005800000000000000000602040801300600103450008700080032000000000
+# 3: 008057200050400070000000005830000609012000000004200300000800000900610000006024800
+#
+# Output (--format=%r):
+3.2
+4.2
+5.7

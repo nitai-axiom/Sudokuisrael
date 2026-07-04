@@ -2,7 +2,7 @@
 
 Status legend: 🔴 open · 🟡 in progress · ✅ fixed
 
-Found during the 2026-06-28 audit. Engine bugs ENG-1/2/3/5 fixed in Phase 2 (test-driven); UI/Python/Rust bugs still open.
+Found during the 2026-06-28 audit. Engine bugs ENG-1/2/3/5 fixed in Phase 2 (test-driven); Python uploader bugs (PY-1/2/3) resolved/obsolete when `upload_to_supabase.py` was replaced by `scripts/load-supabase.mjs` (2026-07-04); UI/Rust bugs still open.
 
 ## Engine (`lib/sudoku-engine.ts`)
 | ID | Sev | Status | Bug | Root cause / fix |
@@ -22,12 +22,13 @@ The new `web/` Next.js app (Phase 3 v1) resolves all four. These bugs still phys
 | UI-3 | Med | ✅ | Difficulty tabs reloaded the same hardcoded puzzle; difficulty was non-functional | Fixed in `web/`: tabs load a real puzzle of that difficulty from `puzzles.json`. |
 | UI-4 | Med | ✅ | `navigator.share?.(…) ?? clipboard` had broken precedence; fragile cross-browser share | Fixed in `web/`: explicit `if (navigator.share)` else clipboard. |
 
-## Python uploader (`upload_to_supabase.py`)
-| ID | Sev | Status | Bug | Root cause / fix |
-|----|-----|--------|-----|------------------|
-| PY-1 | High | 🔴 | No idempotency — re-running duplicates every puzzle | Add UNIQUE on `puzzle` + `.upsert(on_conflict="puzzle")`. |
-| PY-2 | High | 🔴 | No error handling/retries — a blip aborts mid-run, non-resumable | try/except + retry/backoff; track offset. |
-| PY-3 | Med | 🔴 | No per-record validation — malformed record → `KeyError` mid-batch | Validate keys + 81-char length before upload. |
+## Python uploader (`upload_to_supabase.py`) — ✅ OBSOLETE (file deleted 2026-07-04)
+The Python uploader was removed and replaced by `scripts/load-supabase.mjs` (Node/PostgREST). PY-1/2/3 no longer apply to a shipping file:
+| ID | Sev | Status | Bug | Resolution |
+|----|-----|--------|-----|------------|
+| PY-1 | High | ✅ | No idempotency — re-running duplicated every puzzle | Resolved: new loader uses `on_conflict=puzzle` + `resolution=ignore-duplicates` (re-run safe). |
+| PY-2 | High | 🟡 | No error handling/retries — a blip aborted mid-run | Mitigated: new loader is idempotent so a full re-run from the top is safe; per-batch retry/backoff still not implemented (tracked as a minor). |
+| PY-3 | Med | ✅ | No per-record validation → `KeyError` mid-batch | Resolved in practice: the source `sudoku_150000.json` is pre-validated at generation (0 malformed, 81-char enforced); the loader maps fixed keys. |
 
 ## Rust generator (`sudoku-generator/`)
 | ID | Sev | Status | Bug | Root cause / fix |

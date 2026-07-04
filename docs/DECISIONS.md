@@ -1,5 +1,12 @@
 # DECISIONS
 
+## 2026-07-04 — Soften difficulty by ADDING CLUES (not new puzzles) + reweight daily to extreme 3%
+**Context:** After the 150k went live the owner said it *still* felt too hard. Investigation showed the real cause: the entire dataset is 22–26 clues (max 26) — even "very_easy" leaves 55+ blanks, which by convention is hard/expert territory regardless of technique. A genuine beginner "brain-up" wants ~36–40 clues, which the dataset had **zero** of.
+**Options considered:** (A) generate a new high-clue beginner tier (qqwing/Rust) — new puzzles, needs grading; (B) **add clues to existing puzzles** by revealing cells from each puzzle's own known solution.
+**Decision:** **B (owner's call).** Adding givens to a uniquely-solvable puzzle keeps it unique and never requires a harder technique, so no re-rating is needed and the good Kaggle puzzles are reused. `scripts/add-clues.mjs` tops up per tier (very_easy 36–40, easy 30–34, medium +1–3, hard +1), deterministically, keeping ≥2 empty cells in every row/column/box (no unit filled or down to one blank). Idempotent; runs after the dataset build.
+**Also decided:** daily-365 reweighted from 10/40/40/10 to **135/146/73/11** = app tabs easy 37% / medium 40% / hard 20% / **extreme 3%** ("extreme is a hard level," so keep it rare in the daily).
+**Impact:** LIVE on Supabase (reloaded 2026-07-04). The easiest tab now opens with ~38 numbers placed. Note: the small top-up on medium/hard means their stored `techniques`/`er_rating` labels are now conservative upper bounds (a few may be easier than labeled) — re-grade later if exact labels matter; tabs key off the `difficulty` tier, not the labels.
+
 ## 2026-07-04 — Replace ALL puzzle sources with `sudoku_150000.json`; daily-365; streaming Supabase load
 **Context:** With the recalibrated 148,206-puzzle dataset validated (2026-07-03), every other puzzle surface still ran on older/smaller data: the online Supabase pool was unloaded, the Daily was a 2-tier design (migration `0010_interleave_daily.sql`), the offline cold-start bundle and the `web/` prototype sample predated the recalibration, and the reference Supabase loader was a hand-run Python script with no idempotency (PY-1/2/3 in BUGS.md). Needed to decide: how much of the 148,206 goes online, how to purge the stale online data, the daily tier split, the load mechanism, and whether to keep the superseded 10k-era files.
 **Options considered (online pool size):** (A) load all 148,206; (B) load a curated subset to save storage/cost.

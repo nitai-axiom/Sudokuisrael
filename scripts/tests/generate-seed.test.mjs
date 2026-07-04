@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pickTier, interleave, selectDaily, toSeedSql } from "../generate-seed.mjs";
 
-// Small synthetic dataset: enough of each tier to satisfy 37/146/145/37.
+// Small synthetic dataset: enough of each tier to satisfy the 135/146/73/11 quota.
 function makeSet() {
   const rows = [];
   const mk = (difficulty, i, extra) => ({
@@ -14,7 +14,7 @@ function makeSet() {
     fun_score: extra.fun_score ?? null,
     er_rating: extra.er_rating ?? null,
   });
-  for (let i = 0; i < 40; i++) rows.push(mk("very_easy", i, { fun_score: (i % 2) + 1 }));
+  for (let i = 0; i < 150; i++) rows.push(mk("very_easy", i, { fun_score: (i % 2) + 1 }));
   for (let i = 0; i < 160; i++) rows.push(mk("easy", i, { fun_score: (i % 2) + 1 }));
   for (let i = 0; i < 160; i++) rows.push(mk("medium", i, { fun_score: (i % 4) + 2 }));
   for (let i = 0; i < 40; i++) rows.push(mk("hard", i, { er_rating: 3.4 + (i % 10) / 10 }));
@@ -37,7 +37,7 @@ test("pickTier for hard sorts by er_rating ASC (gentlest first)", () => {
 });
 
 test("pickTier throws when the tier can't supply n", () => {
-  assert.throws(() => pickTier(makeSet(), "very_easy", 41), /very_easy/);
+  assert.throws(() => pickTier(makeSet(), "very_easy", 151), /very_easy/);
 });
 
 test("interleave preserves every item and spreads tiers evenly", () => {
@@ -80,7 +80,7 @@ test("selectDaily yields 365 with exact tier composition and a 1..365 permutatio
   assert.equal(daily.length, 365);
   const counts = {};
   for (const p of daily) counts[p.difficulty] = (counts[p.difficulty] ?? 0) + 1;
-  assert.deepEqual(counts, { very_easy: 37, easy: 146, medium: 145, hard: 37 });
+  assert.deepEqual(counts, { very_easy: 135, easy: 146, medium: 73, hard: 11 });
   const sql = toSeedSql(daily);
   const positions = [...sql.matchAll(/,\s*(\d+)\)/g)].map((m) => Number(m[1]));
   assert.equal(positions.length, 365);

@@ -20,11 +20,13 @@ const SRC = resolve(__dirname, "../sudoku_150000.json");
 const DEST = resolve(__dirname, "../../sudoku_next/supabase/seed.sql");
 
 // Fixed tier order (also the interleave tie-break order).
+// Daily-365 mix (owner 2026-07-04): easy-leaning; extreme (DB hard) only ~3%.
+// In app-tab terms: easy 37% · medium 40% · hard 20% · extreme 3%.
 export const TIER_QUOTA = [
-  { name: "very_easy", n: 37 },
+  { name: "very_easy", n: 135 },
   { name: "easy", n: 146 },
-  { name: "medium", n: 145 },
-  { name: "hard", n: 37 },
+  { name: "medium", n: 73 },
+  { name: "hard", n: 11 },
 ];
 
 const cmpPuzzle = (a, b) => (a.puzzle < b.puzzle ? -1 : a.puzzle > b.puzzle ? 1 : 0);

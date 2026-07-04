@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-07-04 — Clue top-up ("add clues" to soften difficulty) + daily reweight (extreme 3%); live reload executed
+**What:** Owner: games still felt too hard. Root cause was in the data — the ENTIRE shipped set was 22–26 clues (max 26), so even the easiest tier looked like an expert board (55+ blanks). Fix: **reveal more of each puzzle's own solution** to raise clue counts — no new puzzles, uniqueness preserved, and no re-rating needed (added givens never require a harder technique).
+- `scripts/add-clues.mjs` (new): per DB tier, deterministically top up from the solution — very_easy → **36–40**, easy → **30–34**, medium **+1–3**, hard **+1** — while keeping **≥2 empty cells in every row/column/box**. Deterministic (seeded by `source_id`), idempotent; run after the dataset is built, before the generators.
+- `generate-seed.mjs`: daily-365 quota **37/146/145/37 → 135/146/73/11** (app tabs easy 37% / medium 40% / hard 20% / **extreme 3%** — "extreme is a hard level").
+- Regenerated `seed.sql` + `cold-start-puzzles.ts` + `puzzles.json` from the topped-up data. 16/16 script tests green.
+**Live:** the online Supabase pool (`zlfsdckigumiheoaakie`) was purged and reloaded with the topped-up 148,206 + new daily positions, via the Supabase-CLI-retrieved `service_role` key + PostgREST. Verified live: total 148,206; daily 135/146/73/11; very_easy clues 36–40; `get_daily_count()`=365.
+**Why:** clue count is what makes a board *look* approachable; 25-clue "very_easy" was hard/expert territory by convention. 38-clue easy = a real brain-up.
+
 ## 2026-07-04 — `sudoku_150000.json` is now the SOLE puzzle source everywhere; daily-365; streaming Supabase loader
 **What:** Replaced every remaining puzzle source (10k dataset, the old library/upload scripts, the 15-puzzle sample) with generators that all read from the shipping **`sudoku_150000.json`** (148,206 puzzles; very_easy 30,000 / easy 45,000 / medium 45,000 / hard 28,206). Four deterministic, unit-tested (`node --test`) scripts in `scripts/`:
 - `generate-seed.mjs` (rewritten) — picks the **365 daily** puzzles (37 very_easy + 146 easy + 145 medium + 37 hard = 10/40/40/10). Lower tiers ranked by `fun_score` DESC then `puzzle` ASC; hard by `er_rating` ASC (gentlest, since hard has no fun_score). Assigns `position` 1..365 via a deterministic even (Bresenham-style) interleave so difficulty varies day-to-day. Writes `sudoku_next/supabase/seed.sql`.

@@ -1,30 +1,29 @@
 # STATUS
 
-**Last updated:** 2026-07-03
-**Phase:** Difficulty recalibrated. **New shipping dataset: `sudoku_150000.json` (148,206 puzzles, Kaggle-sourced, re-rated).** Old 10k dataset superseded.
+**Last updated:** 2026-07-04
+**Phase:** `sudoku_150000.json` is now the **SOLE puzzle source everywhere** — daily, cold-start bundle, prototype sample, and the online Supabase pool. Legacy 10k dataset + its generator/loader scripts are deleted.
 
 ## One-line state
-There is now ONE game: a Next.js app in `web/` that plays through the tested engine. **The shipping dataset is now `sudoku_150000.json`** — 148,206 puzzles sourced from Kaggle's 3M rated set and re-validated/re-rated in the sandbox (very_easy 30,000 · easy 45,000 · medium 45,000 · hard 28,206; **0 duplicates, 0 malformed, ids 1…148,206, every record carries its Kaggle `source_id`**). Difficulty was **recalibrated for fun** (owner: old games too hard/not fun): gentle entry (very_easy = 25–26 clues, pure singles) and a fair-but-challenging hard tier at serate **ER 3.4–4.5** (median 4.2, pure logic — no guessing/coloring/chains). The older `sudoku_10000.json` (HoDoKu hard tier, ER 3.4–5.0) is retained but superseded.
+There is now ONE game: a Next.js app in `web/` that plays through the tested engine. **`sudoku_150000.json` (148,206 puzzles, very_easy 30,000 · easy 45,000 · medium 45,000 · hard 28,206) is the only puzzle source everywhere**: the 365-puzzle Daily, the 12-puzzle offline cold-start bundle, the 15-puzzle prototype sample, and the full online Supabase pool are all generated/loaded from it by deterministic, unit-tested scripts in `scripts/`. Daily is now **365** puzzles (37 very_easy + 146 easy + 145 medium + 37 hard, interleaved by position). The online pool loads via **`scripts/load-supabase.mjs`**, a streaming PostgREST loader — running it against the live DB is a manual operator step (needs the service-role key; procedure in `sudoku_next/docs/RELOAD-RUNBOOK.md`). The old `sudoku_10000.json`/`sudoku_lower.json` datasets and their loaders (`generate-library.mjs`, `upload_to_supabase.py`, the committed `puzzles_library.sql`) are deleted — see CHANGELOG 2026-07-04.
 
 ## What's working
 | Component | State | Notes |
 |---|---|---|
-| Dataset pipeline (`dataset-pipeline/`) | ✅ **Kaggle recalibration done; 148,206 produced** | Shipping dataset `sudoku_150000.json` (gitignored, 68 MB). Kaggle 3M source, fetched+filtered **in-sandbox** (raw CSV only in a Docker volume). Lower tiers: qqwing uniqueness + Rust grader. Hard tier: serate ER **3.4–4.5** (median 4.2). `bin/run-kaggle.ts` (`--calibrate`/`--count N`/full), checkpoint+cursor resumable. 98 tests green. *(Old path — `bin/run-all.ts` → `sudoku_10000.json` with HoDoKu/serate hard tier — still present but superseded.)* |
+| Dataset pipeline (`dataset-pipeline/`) | ✅ **Kaggle recalibration done; 148,206 produced** | Shipping dataset `sudoku_150000.json` (gitignored, 68 MB). Kaggle 3M source, fetched+filtered **in-sandbox** (raw CSV only in a Docker volume). Lower tiers: qqwing uniqueness + Rust grader. Hard tier: serate ER **3.4–4.5** (median 4.2). `bin/run-kaggle.ts` (`--calibrate`/`--count N`/full), checkpoint+cursor resumable. 98 tests green. *(Old path — `bin/run-all.ts` produced the now-deleted `sudoku_10000.json`; the file/entry point remain in the repo but are superseded and unmaintained.)* |
+| Puzzle generators (`scripts/`) | ✅ **Rewritten — all source `sudoku_150000.json`, the sole puzzle source everywhere** | `generate-seed.mjs` → daily-365 (`sudoku_next/supabase/seed.sql`); `generate-cold-start.mjs` → 12-puzzle offline bundle (`sudoku_next/app/lib/cold-start-puzzles.ts`); `generate-sample-puzzles.mjs` → root `puzzles.json` (15, prototype only); `load-supabase.mjs` → streams all 148,206 into the live Supabase `puzzles` table (idempotent upsert, batches of 500). All deterministic, unit-tested (`node --test`, `scripts/tests/`). |
 | Next.js app (`web/`) | ✅ v1 playable | Real engine, RTL/Hebrew, mobile + desktop. Difficulty loads real puzzles. Verified by browser smoke test. |
 | Game engine (`lib/sudoku-engine.ts`) | ✅ Works, tested | Now the single source of game logic. 5 tests (`npm test`). ENG-4 (hint/notes) still open. |
 | Rust puzzle generator (`sudoku-generator/`) | ✅ Works, extended | Base generates graded puzzles; new `--grade` mode added for dataset pipeline. |
 | `index.html` prototype | ⚠️ Superseded | Kept as visual reference only. Delete once owner confirms parity (RS/UI bugs in it no longer matter). |
-| Python uploader (`upload_to_supabase.py`) | ⚠️ Works once, by hand | Unchanged. See BUGS.md (PY-1/2/3). |
 | OCR scanner (`lib/scanner/`) | 🟥 WIP ~30% | Parked. |
 
 ## In progress
 - **Site rebuild moved to a new repo.** Game development now continues in **`nitai-axiom/sudoku_next`** (private, https://github.com/nitai-axiom/sudoku_next), seeded with a self-contained copy of `web/` (engine + `puzzles.json` pulled in, aliases rewired, `next build` verified). Target: Supabase-backed, deployed from scratch. THIS pipeline repo stays the dataset/pipeline source. See DECISIONS (2026-06-29, Supabase) + CHANGELOG.
-- Phase 3 v1 complete; Dataset pipeline Plans 1 + 2 complete; full 10,000 dataset generated on branch `feat/dataset-pipeline-plan2` (awaiting merge).
+- Phase 3 v1 complete; Dataset pipeline Plans 1 + 2 complete. The 150k-is-sole-source + daily-365 work (2026-07-04) is code-complete and unit-tested on both repos; the live Supabase reload itself is still a **manual operator step** (see below).
 
 ## Next steps for the new `sudoku_next` repo
-1. Stand up Supabase project + `puzzles` table; load **`sudoku_150000.json`** into it (schema now includes `id` + `source_id`; reference loader: `upload_to_supabase.py` here — regenerate the file with `node dataset-pipeline/bin/run-kaggle.ts` since it's gitignored).
-2. Switch the app from bundled `puzzles.json` to fetching puzzles from Supabase.
-3. Accounts / saved progress; then deploy (Vercel).
+1. **Manual operator step (not yet run against prod):** purge + reload the live Supabase `puzzles` table with all 148,206 records via `node scripts/load-supabase.mjs` (streaming PostgREST, service-role key supplied at runtime — not in `.env.local`), then re-stamp the 365 daily positions from `seed.sql`. Full procedure: `sudoku_next/docs/RELOAD-RUNBOOK.md`.
+2. Accounts / saved progress; then deploy (Vercel).
 
 ## Regenerating `sudoku_150000.json` (2026-07-03)
 It's gitignored (68 MB). To rebuild from scratch: (1) `bash dataset-pipeline/sandbox/build-kaggle.sh`; (2) `export KAGGLE_API_TOKEN=$(cat ~/.kaggle/access_token)` then `node -e "import('./dataset-pipeline/src/kaggle-source.ts').then(m=>m.fetchKaggleCsv())"` (downloads the 536 MB CSV into the `kaggle-csv` Docker volume — stays off the host); (3) `node -e "…m.runFilter(4)"`; (4) `node dataset-pipeline/bin/run-kaggle.ts` (~1–1.5 h; hard tier serate-dominated; checkpoint-resumable). Preview difficulty first with `--calibrate`; smoke with `--count 50`. **After changing any pre-filter band / ER band / oversample, add `--fresh`** (clears the namespaced `kaggle-<tier>` checkpoints; a stale cursor would otherwise resume against a different candidate list). Kaggle checkpoints are namespaced `kaggle-<tier>` so they never collide with the 10k `run-all.ts` pipeline.
@@ -44,6 +43,6 @@ It's gitignored (68 MB). To rebuild from scratch: (1) `bash dataset-pipeline/san
 | 3 | ~~Dataset Plan 2: hard tier + serate ER rating (untrusted sandbox)~~ ✅ done — full 10k dataset | Pipeline |
 | 4 | Resolve ENG-4 (decide if hints mutate notes) → richer hints | 2/3 |
 | 5 | Supabase: fetch puzzles from DB instead of bundled `puzzles.json` | 4 |
-| 6 | Harden Python uploader (retries, idempotent upsert) | 4 |
+| 6 | ~~Harden puzzle uploader (retries, idempotent upsert)~~ ✅ done — `upload_to_supabase.py` deleted; replaced by `scripts/load-supabase.mjs` (idempotent `on_conflict=puzzle` + `resolution=ignore-duplicates`, batched) | 4 |
 | 7 | Deploy to Vercel; login/accounts; ads | later |
 | 8 | Resume OCR scanner (grid detection + digit recognition) | later |

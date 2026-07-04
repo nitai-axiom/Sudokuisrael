@@ -21,8 +21,15 @@ sudoku-pipeline/
 │   ├── Cargo.toml
 │   └── src/main.rs
 │
+├── scripts/                     # Puzzle-source generators — ALL read sudoku_150000.json (the sole puzzle source)
+│   ├── generate-seed.mjs        # → sudoku_next/supabase/seed.sql (365 daily puzzles, interleaved)
+│   ├── generate-cold-start.mjs  # → sudoku_next/app/lib/cold-start-puzzles.ts (12 offline puzzles)
+│   ├── generate-sample-puzzles.mjs # → puzzles.json (15 sample puzzles, prototype only)
+│   ├── load-supabase.mjs        # streams all 148,206 puzzles into Supabase (service-role key at runtime)
+│   └── tests/                   # node --test coverage for the above
+│
 ├── puzzles.json                # Sample generated puzzles (5 easy, 5 medium, 5 hard)
-├── upload_to_supabase.py       # Bulk-insert puzzles into Supabase
+├── sudoku_150000.json          # Shipping dataset: 148,206 puzzles (git-ignored, 68 MB)
 ├── tsconfig.json               # TypeScript build config
 ├── docs/                       # Project docs (STATUS, BUGS, DECISIONS, …)
 └── .gitignore
@@ -126,23 +133,30 @@ Difficulty is graded by which solving techniques are required:
 
 ---
 
-### 3. Supabase Upload — `upload_to_supabase.py`
+### 3. Puzzle-source generators — `scripts/*.mjs`
 
-Bulk-inserts puzzles from JSON into Supabase.
+`sudoku_150000.json` (148,206 puzzles — very_easy 30,000 / easy 45,000 / medium 45,000 / hard 28,206) is the **sole puzzle source**, everywhere. Four deterministic, unit-tested (`node --test`) scripts all read it directly and regenerate one downstream artifact each:
+
+| Script | Produces | Notes |
+|---|---|---|
+| `generate-seed.mjs` | `sudoku_next/supabase/seed.sql` | The 365 **daily** puzzles (37 very_easy + 146 easy + 145 medium + 37 hard = 10/40/40/10). Lower tiers picked by `fun_score` DESC then `puzzle` ASC; hard by `er_rating` ASC (gentlest, since hard has no `fun_score`). `position` 1..365 assigned by a deterministic even interleave across tiers. |
+| `generate-cold-start.mjs` | `sudoku_next/app/lib/cold-start-puzzles.ts` | The 12-puzzle offline bundle (3 per DB tier, remapped to app labels: very_easy→easy, easy→medium, medium→hard, hard→extreme). |
+| `generate-sample-puzzles.mjs` | `puzzles.json` | 15 sample puzzles (5 each easy/medium/hard) — only used by the superseded `web/` prototype so it still builds. |
+| `load-supabase.mjs` | live Supabase `puzzles` table | Streams **all 148,206** puzzles via PostgREST (`on_conflict=puzzle`, `resolution=ignore-duplicates`, batches of 500). Takes a service-role key at runtime — never committed. |
+
+Run any of them with plain Node from the repo root, e.g.:
 
 ```bash
-# Setup
-pip install supabase python-dotenv
+node scripts/generate-seed.mjs
+node scripts/generate-cold-start.mjs
+node scripts/generate-sample-puzzles.mjs
 
-# Create .env (NOT committed)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your-service-key
-
-# Run
-python upload_to_supabase.py puzzles.json
+SUPABASE_URL='https://<project>.supabase.co' \
+SUPABASE_SERVICE_KEY='<service-role-key>' \
+node scripts/load-supabase.mjs
 ```
 
-Inserts into a `puzzles` table in batches of 50. Expected columns: `puzzle`, `solution`, `difficulty`, `techniques`, `givens`, `created_at` (auto).
+Loading (or reloading) the **live** Supabase database is a manual operator procedure — see `sudoku_next/docs/RELOAD-RUNBOOK.md` (purge, load, re-stamp daily positions, verify). `scripts/generate-library.mjs` and `upload_to_supabase.py` (the old 10k-era generator + hand-run Python uploader) have been deleted; `load-supabase.mjs` replaces both.
 
 ---
 
@@ -176,9 +190,9 @@ Still missing: corner/grid detection, cell segmentation, the digit-recognition (
 ## How It All Connects
 
 ```
-┌─────────────────┐     puzzles.json     ┌──────────────────┐
-│  Rust Generator  │ ──────────────────► │  upload_to_       │
-│  (sudoku-gen)    │                     │  supabase.py      │
+┌─────────────────┐  sudoku_150000.json  ┌──────────────────┐
+│  Dataset         │ ──────────────────► │  scripts/         │
+│  pipeline        │                     │  load-supabase.mjs│
 └─────────────────┘                     └────────┬─────────┘
                                                  │
                                                  ▼
@@ -200,8 +214,8 @@ Still missing: corner/grid detection, cell segmentation, the digit-recognition (
                                         └─────────────────────┘
 ```
 
-1. **Generate** puzzles with the Rust CLI → `puzzles.json`
-2. **Upload** to Supabase with the Python script
+1. **Generate/source** puzzles → `sudoku_150000.json` (dataset pipeline), `puzzles.json` (`scripts/generate-sample-puzzles.mjs`, prototype only)
+2. **Load** to Supabase with `scripts/load-supabase.mjs`
 3. **Serve** a puzzle to the client (Next.js fetches from Supabase)
 4. **Play** using `SudokuEngine` — all game logic runs client-side
 5. **Scan** (future) — import a physical puzzle via camera
